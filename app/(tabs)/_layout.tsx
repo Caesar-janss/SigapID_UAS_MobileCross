@@ -1,33 +1,25 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useColorScheme, Text } from 'react-native';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// Import ini disesuaikan dengan folder 'theme' dan 'constants' Anda
+import { colors } from '@/theme'; 
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const activeColor = colors.primary; // Menggunakan warna primary dari theme Anda
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
+        tabBarActiveTintColor: activeColor,
+        headerShown: true,
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color }) => <Text style={{ color }}>🏠</Text>, // Icon sementara
         }}
       />
     </Tabs>
