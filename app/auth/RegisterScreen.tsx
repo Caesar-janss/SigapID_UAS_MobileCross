@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,7 +39,7 @@ export default function RegisterScreen() {
       Alert.alert(
         "Pendaftaran berhasil",
         "Silakan masuk dengan akun yang baru dibuat.",
-        [{ text: "OK", onPress: () => router.replace("/auth/LoginScreen") }]
+        [{ text: "OK", onPress: () => router.replace("/auth/LoginScreen") }],
       );
     } catch (e) {
       Alert.alert(
@@ -69,14 +70,14 @@ export default function RegisterScreen() {
             <RoleCard
               selected={role === "reporter"}
               onPress={() => setRole("reporter")}
-              emoji="👤"
+              icon="account-alert-outline"
               title="Pelapor"
               description="Saya butuh bantuan darurat"
             />
             <RoleCard
               selected={role === "dispatcher"}
               onPress={() => setRole("dispatcher")}
-              emoji="🎧"
+              icon="headset"
               title="Operator"
               description="Saya menerima laporan"
             />
@@ -125,8 +126,19 @@ export default function RegisterScreen() {
   );
 }
 
-// Komponen Internal RoleCard
-const RoleCard = ({ selected, onPress, emoji, title, description }: any) => (
+const RoleCard = ({
+  selected,
+  onPress,
+  icon,
+  title,
+  description,
+}: {
+  selected: boolean;
+  onPress: () => void;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  title: string;
+  description: string;
+}) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [
@@ -135,7 +147,13 @@ const RoleCard = ({ selected, onPress, emoji, title, description }: any) => (
       pressed && { opacity: 0.85 },
     ]}
   >
-    <Text style={styles.roleEmoji}>{emoji}</Text>
+    <View style={[styles.roleBadge, selected && styles.roleBadgeSelected]}>
+      <MaterialCommunityIcons
+        name={icon}
+        size={24}
+        color={selected ? colors.textInverse : colors.text}
+      />
+    </View>
     <Text style={[typography.bodyStrong, { color: selected ? colors.primary : colors.text }]}>
       {title}
     </Text>
@@ -166,7 +184,18 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
   },
-  roleEmoji: { fontSize: 32, marginBottom: spacing.sm },
+  roleBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceMuted,
+    marginBottom: spacing.sm,
+  },
+  roleBadgeSelected: {
+    backgroundColor: colors.primary,
+  },
   roleDesc: {
     fontSize: 11,
     color: colors.textMuted,
