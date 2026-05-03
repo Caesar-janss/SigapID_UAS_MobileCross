@@ -52,6 +52,12 @@
           "photosPermission": "SigapID perlu akses galeri untuk memilih foto profil.",
           "cameraPermission": "SigapID perlu akses kamera untuk mengambil foto profil."
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "SigapID perlu akses mikrofon untuk merekam voice note darurat."
+        }
       ]
     ],
     "experiments": {

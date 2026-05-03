@@ -476,6 +476,39 @@ grant execute on function public.can_read_profile_from_report(uuid) to authentic
 grant execute on function public.assign_operator_to_report(uuid) to authenticated;
 grant execute on function public.claim_report_for_operator(uuid) to authenticated;
 
+create or replace function public.can_store_report_voice_note(object_name text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  parts text[];
+  target_report_id uuid;
+begin
+  parts := storage.foldername(object_name);
+
+  if array_length(parts, 1) < 2 then
+    return false;
+  end if;
+
+  if parts[2] <> auth.uid()::text then
+    return false;
+  end if;
+
+  begin
+    target_report_id := parts[1]::uuid;
+  exception
+    when invalid_text_representation then
+      return false;
+  end;
+
+  return public.can_access_report(target_report_id);
+end;
+$$;
+
+grant execute on function public.can_store_report_voice_note(text) to authenticated;
+
 insert into storage.buckets (
   id,
   name,
@@ -535,6 +568,67 @@ to authenticated
 using (
   bucket_id = 'profile-avatars'
   and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'report-voice-notes',
+  'report-voice-notes',
+  true,
+  2097152,
+  array['audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/mpeg', 'audio/webm', 'audio/3gpp']
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Report voice notes are public" on storage.objects;
+create policy "Report voice notes are public"
+on storage.objects
+for select
+to public
+using (bucket_id = 'report-voice-notes');
+
+drop policy if exists "Participants can upload report voice notes" on storage.objects;
+create policy "Participants can upload report voice notes"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'report-voice-notes'
+  and public.can_store_report_voice_note(name)
+);
+
+drop policy if exists "Participants can update report voice notes" on storage.objects;
+create policy "Participants can update report voice notes"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'report-voice-notes'
+  and public.can_store_report_voice_note(name)
+)
+with check (
+  bucket_id = 'report-voice-notes'
+  and public.can_store_report_voice_note(name)
+);
+
+drop policy if exists "Participants can delete report voice notes" on storage.objects;
+create policy "Participants can delete report voice notes"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'report-voice-notes'
+  and public.can_store_report_voice_note(name)
 );
 
 drop policy if exists "Users can read their own profile" on public.profiles;

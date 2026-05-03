@@ -23,6 +23,7 @@ const activeStatuses: EmergencyStatus[] = [
 
 const chatPollingMs = 1500;
 const historyLimit = 15;
+const voiceNoteBucket = "report-voice-notes";
 
 type ReportInsert = {
   type: EmergencyType;
@@ -123,6 +124,69 @@ function mergeMessages(current: Message[], incoming: Message | Message[]) {
   });
 
   return sortMessages(Array.from(byId.values()));
+}
+
+function voiceContentType(uri: string, fallback?: string | null) {
+  const contentType = fallback?.split(";")[0]?.trim();
+
+  if (contentType?.startsWith("audio/")) {
+    return contentType;
+  }
+
+  const cleanUri = uri.split("?")[0].toLowerCase();
+
+  if (cleanUri.endsWith(".3gp") || cleanUri.endsWith(".3gpp")) {
+    return "audio/3gpp";
+  }
+
+  if (cleanUri.endsWith(".webm")) {
+    return "audio/webm";
+  }
+
+  if (cleanUri.endsWith(".aac")) {
+    return "audio/aac";
+  }
+
+  if (cleanUri.endsWith(".mp3")) {
+    return "audio/mpeg";
+  }
+
+  return "audio/mp4";
+}
+
+function voiceExtension(contentType: string, uri: string) {
+  const cleanUri = uri.split("?")[0].toLowerCase();
+  const match = cleanUri.match(/\.([a-z0-9]+)$/);
+
+  if (match?.[1]) {
+    return match[1];
+  }
+
+  if (contentType === "audio/3gpp") return "3gp";
+  if (contentType === "audio/webm") return "webm";
+  if (contentType === "audio/aac") return "aac";
+  if (contentType === "audio/mpeg") return "mp3";
+
+  return "m4a";
+}
+
+function voiceStorageError(message: string) {
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes("bucket") ||
+    lowerMessage.includes("row-level security") ||
+    lowerMessage.includes("permission") ||
+    lowerMessage.includes("not found")
+  ) {
+    return "Storage voice note belum siap. Jalankan ulang supabase/profiles.sql di Supabase SQL Editor.";
+  }
+
+  if (lowerMessage.includes("exceeded") || lowerMessage.includes("too large")) {
+    return "Voice note terlalu besar. Coba rekam lebih pendek.";
+  }
+
+  return message;
 }
 
 export function useReporterReports() {
@@ -463,33 +527,100 @@ export function useEmergencyChat(reportId?: string) {
 
       setSending(true);
 
-      const { data, error: insertError } = await supabase
-        .from("messages")
-        .insert({
-          report_id: reportId,
-          sender_id: profile.id,
-          body: trimmedBody || null,
-          kind,
-          media_url: options?.mediaUrl ?? null,
-          voice_duration_seconds: options?.voiceDurationSeconds ?? null,
-        })
-        .select("*")
-        .single();
+      try {
+        const { data, error: insertError } = await supabase
+          .from("messages")
+          .insert({
+            report_id: reportId,
+            sender_id: profile.id,
+            body: trimmedBody || null,
+            kind,
+            media_url: options?.mediaUrl ?? null,
+            voice_duration_seconds: options?.voiceDurationSeconds ?? null,
+          })
+          .select("*")
+          .single();
 
-      setSending(false);
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
 
-      if (insertError) {
-        throw new Error(insertError.message);
-      }
-
-      if (data) {
-        setMessages((current) => mergeMessages(current, data as Message));
+        if (data) {
+          setMessages((current) => mergeMessages(current, data as Message));
+        }
+      } finally {
+        setSending(false);
       }
     },
     [profile?.id, reportId],
   );
 
-  return { messages, loading, error, sending, sendMessage, reload: loadMessages };
+  const sendVoiceNote = useCallback(
+    async (uri: string, durationSeconds: number) => {
+      if (!reportId || !profile?.id) return;
+
+      setSending(true);
+
+      try {
+        const response = await fetch(uri);
+        const contentType = voiceContentType(uri, response.headers.get("content-type"));
+        const fileBody = await response.arrayBuffer();
+        const storagePath = `${reportId}/${profile.id}/${Date.now()}.${voiceExtension(
+          contentType,
+          uri,
+        )}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(voiceNoteBucket)
+          .upload(storagePath, fileBody, {
+            contentType,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(voiceStorageError(uploadError.message));
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from(voiceNoteBucket)
+          .getPublicUrl(storagePath);
+
+        const { data, error: insertError } = await supabase
+          .from("messages")
+          .insert({
+            report_id: reportId,
+            sender_id: profile.id,
+            body: "Voice note",
+            kind: "voice",
+            media_url: publicUrlData.publicUrl,
+            voice_duration_seconds: durationSeconds,
+          })
+          .select("*")
+          .single();
+
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
+
+        if (data) {
+          setMessages((current) => mergeMessages(current, data as Message));
+        }
+      } finally {
+        setSending(false);
+      }
+    },
+    [profile?.id, reportId],
+  );
+
+  return {
+    messages,
+    loading,
+    error,
+    sending,
+    sendMessage,
+    sendVoiceNote,
+    reload: loadMessages,
+  };
 }
 
 export function useEmergencyActions() {

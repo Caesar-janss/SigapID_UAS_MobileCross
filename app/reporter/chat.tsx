@@ -18,15 +18,19 @@ import {
   useReporterReports,
 } from "@/hooks/useEmergencyReports";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  formatVoiceDuration,
+  useVoiceNoteRecorder,
+} from "@/hooks/useVoiceNoteRecorder";
 import { emergencyStatusLabel } from "@/utils/format";
-import { isExpoGo, showApkOnlyFeature } from "@/utils/nativeFeatures";
+import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
-  Card,
   ChatBubble,
   IconButton,
   ScreenShell,
 } from "@/components/app/MockAppUI";
+import { VoiceNoteBubble } from "@/components/app/VoiceNoteBubble";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function ReporterChat() {
@@ -35,9 +39,15 @@ export default function ReporterChat() {
   const { activeReport } = useReporterReports();
   const reportId = params.reportId ?? activeReport?.id;
   const { report } = useEmergencyReport(reportId);
-  const { messages, loading, error, sending, sendMessage, reload } =
+  const { messages, loading, error, sending, sendMessage, sendVoiceNote, reload } =
     useEmergencyChat(reportId);
   const { finishReport } = useEmergencyActions();
+  const {
+    durationSeconds,
+    isRecording,
+    startRecording,
+    stopRecording,
+  } = useVoiceNoteRecorder();
   const [draft, setDraft] = useState("");
   const visibleMessages = messages.filter((message) => message.kind !== "system");
   const scrollRef = useRef<ScrollView>(null);
@@ -60,6 +70,10 @@ export default function ReporterChat() {
   }, [scrollToLatest, visibleMessages.length]);
 
   const handleSend = async () => {
+    if (isRecording || sending) {
+      return;
+    }
+
     try {
       await sendMessage(draft);
       setDraft("");
@@ -72,18 +86,21 @@ export default function ReporterChat() {
   };
 
   const handleVoice = async () => {
-    if (isExpoGo()) {
-      showApkOnlyFeature("Voice chat");
+    if (!reportId || sending) {
       return;
     }
 
     try {
-      await sendMessage("Pelapor mengirim pesan suara.", "voice", {
-        voiceDurationSeconds: 10,
-      });
+      if (isRecording) {
+        const voiceNote = await stopRecording();
+        await sendVoiceNote(voiceNote.uri, voiceNote.durationSeconds);
+        return;
+      }
+
+      await startRecording();
     } catch (sendError) {
       Alert.alert(
-        "Voice gagal",
+        "Voice note gagal",
         sendError instanceof Error ? sendError.message : "Terjadi kesalahan.",
       );
     }
@@ -114,7 +131,11 @@ export default function ReporterChat() {
       }
       action={
         <View style={styles.headerActions}>
-          <IconButton icon="microphone" tone="secondary" onPress={handleVoice} />
+          <IconButton
+            icon={isRecording ? "stop" : "microphone"}
+            tone={isRecording ? "danger" : "secondary"}
+            onPress={handleVoice}
+          />
           <IconButton
             icon="phone"
             tone="secondary"
@@ -151,27 +172,12 @@ export default function ReporterChat() {
           ) : (
             visibleMessages.map((message) =>
               message.kind === "voice" ? (
-                <Card
+                <VoiceNoteBubble
                   key={message.id}
-                  style={[
-                    styles.voiceBubble,
-                    message.sender_id === profile?.id && styles.voiceBubbleMine,
-                  ]}
-                >
-                  <View style={styles.playButton}>
-                    <MaterialCommunityIcons
-                      name="play"
-                      size={20}
-                      color={colors.textInverse}
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.voiceTitle}>{message.body ?? "Pesan suara"}</Text>
-                    <Text style={styles.voiceTime}>
-                      {message.voice_duration_seconds ?? 0} detik
-                    </Text>
-                  </View>
-                </Card>
+                  mine={message.sender_id === profile?.id}
+                  mediaUrl={message.media_url}
+                  durationSeconds={message.voice_duration_seconds}
+                />
               ) : (
                 <ChatBubble key={message.id} mine={message.sender_id === profile?.id}>
                   {message.body}
@@ -182,6 +188,15 @@ export default function ReporterChat() {
         </ScrollView>
 
         <View style={styles.composer}>
+          {isRecording && (
+            <View style={styles.recordingBar}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>
+                Merekam {formatVoiceDuration(durationSeconds)}
+              </Text>
+            </View>
+          )}
+
           <View style={styles.inputBar}>
             <TextInput
               style={styles.input}
@@ -189,7 +204,7 @@ export default function ReporterChat() {
               placeholderTextColor={colors.textSubtle}
               value={draft}
               onChangeText={setDraft}
-              editable={!sending && !!reportId}
+              editable={!sending && !!reportId && !isRecording}
             />
             <MaterialCommunityIcons
               name="send"
@@ -223,39 +238,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.sm,
   },
-  voiceBubble: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  voiceBubbleMine: {
-    alignSelf: "flex-end",
-    backgroundColor: "#E8F4FF",
-    borderColor: "#BFDBFE",
-  },
   emptyText: {
     ...typography.caption,
     color: colors.textMuted,
     textAlign: "center",
-  },
-  playButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2F80C5",
-  },
-  voiceTitle: {
-    ...typography.bodyStrong,
-    color: colors.text,
-  },
-  voiceTime: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   headerActions: {
     flexDirection: "row",
@@ -264,6 +250,25 @@ const styles = StyleSheet.create({
   composer: {
     gap: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  recordingBar: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderRadius: 16,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+  },
+  recordingDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.danger,
+  },
+  recordingText: {
+    ...typography.caption,
+    color: colors.primaryDark,
   },
   inputBar: {
     minHeight: 48,
