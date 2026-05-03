@@ -1,5 +1,11 @@
-import { Href } from "expo-router";
+import { Href, router, useLocalSearchParams } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import {
+  useEmergencyActions,
+  useEmergencyReport,
+  useReporterReports,
+} from "@/hooks/useEmergencyReports";
+import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -13,13 +19,91 @@ import {
 } from "@/components/app/MockAppUI";
 
 export default function ReporterTracking() {
+  const params = useLocalSearchParams<{ reportId?: string }>();
+  const { activeReport, loading: activeLoading } = useReporterReports();
+  const targetReportId = params.reportId ?? activeReport?.id;
+  const { report, loading, error } = useEmergencyReport(targetReportId);
+  const { finishReport } = useEmergencyActions();
+  const active = report ?? activeReport;
+
+  const handleFinish = async () => {
+    if (!active?.id) return;
+
+    try {
+      await finishReport(active.id);
+      router.replace("/reporter/history");
+    } catch (finishError) {
+      Alert.alert(
+        "Gagal menyelesaikan laporan",
+        finishError instanceof Error ? finishError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const openChat = () => {
+    if (!active?.id) {
+      Alert.alert("Belum ada laporan aktif", "Buat laporan darurat terlebih dahulu.");
+      return;
+    }
+
+    router.push({
+      pathname: "/reporter/chat",
+      params: { reportId: active.id },
+    });
+  };
+
+  const openCall = async () => {
+    if (!active?.id) return;
+    Alert.alert(
+      "Panggilan",
+      `Ruang panggilan: ${active.call_room ?? "belum tersedia"}. Integrasi audio realtime bisa memakai WebRTC/Twilio nanti.`,
+    );
+  };
+
+  if (loading || activeLoading) {
+    return (
+      <ScreenShell
+        role="reporter"
+        activeTab="tracking"
+        title="Memuat Laporan"
+        subtitle="Mengambil laporan aktif dari backend."
+      >
+        <Card>
+          <Text style={styles.mockNote}>Sebentar, data laporan sedang dimuat.</Text>
+        </Card>
+      </ScreenShell>
+    );
+  }
+
+  if (error || !active) {
+    return (
+      <ScreenShell
+        role="reporter"
+        activeTab="tracking"
+        title="Belum Ada Laporan Aktif"
+        subtitle="Buat laporan darurat dari halaman home."
+      >
+        <Card style={styles.sensorCard}>
+          <Text style={styles.sectionCaption}>
+            {error ?? "Tidak ada laporan aktif yang perlu dilacak."}
+          </Text>
+          <PrimaryAction
+            label="Buat Laporan"
+            icon="alert-circle-outline"
+            tone="danger"
+            onPress={() => navigateTo("/reporter/dashboard" as Href)}
+          />
+        </Card>
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell
       role="reporter"
       activeTab="tracking"
-      eyebrow="User - Tracking"
-      title="Bantuan Datang"
-      subtitle="Unit terdekat sudah menerima laporan dan menuju lokasi."
+      title={emergencyTypeLabel(active.type)}
+      subtitle={`Laporan ${formatRelativeTime(active.created_at)} - ${emergencyStatusLabel(active.status)}`}
       action={
         <IconButton
           icon="crosshairs-gps"
@@ -35,22 +119,26 @@ export default function ReporterTracking() {
             <View style={styles.statusText}>
               <Text style={styles.sectionTitle}>Bantuan sedang menuju</Text>
               <Text style={styles.sectionCaption}>
-                Tetap berada di lokasi aman dan aktifkan notifikasi.
+                {active.assigned_operator?.full_name
+                  ? `Terhubung dengan ${active.assigned_operator.full_name}.`
+                  : "Sistem sedang mencari operator yang tersedia."}
               </Text>
             </View>
-            <StatusPill label="Aktif" tone="success" />
+            <StatusPill
+              label={emergencyStatusLabel(active.status)}
+              tone={active.status === "pending" ? "warning" : "success"}
+            />
           </View>
 
           <InfoGrid
             items={[
-              { label: "Jarak", value: "1.4 km" },
-              { label: "Estimasi", value: "4 menit" },
+              { label: "Prioritas", value: active.priority },
+              { label: "Operator", value: active.assigned_operator?.full_name ?? "Mencari" },
             ]}
           />
 
           <Text style={styles.mockNote}>
-            Data ini masih tampilan sementara sampai laporan darurat
-            disambungkan ke backend.
+            {active.description ?? active.title ?? "Tetap berada di lokasi aman dan aktifkan notifikasi."}
           </Text>
         </View>
 
@@ -60,14 +148,21 @@ export default function ReporterTracking() {
             icon="phone"
             tone="secondary"
             style={styles.actionFlex}
-            onPress={() => Alert.alert("Panggilan", "Simulasi telepon operator.")}
+            onPress={openCall}
           />
           <PrimaryAction
             label="Pesan"
             icon="message-outline"
             tone="soft"
             style={styles.actionFlex}
-            onPress={() => navigateTo("/reporter/chat" as Href)}
+            onPress={openChat}
+          />
+          <PrimaryAction
+            label="Selesai"
+            icon="check-circle-outline"
+            tone="danger"
+            style={styles.actionFlex}
+            onPress={handleFinish}
           />
         </View>
       </Card>

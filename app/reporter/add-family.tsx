@@ -80,7 +80,6 @@ export default function ReporterAddFamily() {
     <ScreenShell
       role="reporter"
       activeTab="home"
-      eyebrow="User - Home - Tambah Keluarga"
       title="Keluarga"
       subtitle="Gunakan ID akun agar pencarian anggota keluarga tidak tertukar nama."
     >

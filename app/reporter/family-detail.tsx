@@ -1,24 +1,47 @@
 import { Href } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
+import { useAuth } from "@/hooks/useAuth";
+import { FamilyMemberWithProfile } from "@/types";
 import { colors, radius, spacing, typography } from "@/theme";
 import {
   Card,
   IconButton,
+  PrimaryAction,
   ScreenShell,
   StatusPill,
   navigateTo,
 } from "@/components/app/MockAppUI";
 
 export default function ReporterFamilyDetail() {
-  const { members, loading, error } = useFamilyMembers();
+  const { profile } = useAuth();
+  const { members, loading, error, updateRequestStatus } = useFamilyMembers();
+
+  const handleRequest = async (
+    memberId: string,
+    status: "accepted" | "rejected",
+  ) => {
+    try {
+      await updateRequestStatus(memberId, status);
+      Alert.alert(
+        status === "accepted" ? "Permintaan diterima" : "Permintaan ditolak",
+        status === "accepted"
+          ? "Akun keluarga sudah terhubung."
+          : "Permintaan keluarga sudah ditolak.",
+      );
+    } catch (requestError) {
+      Alert.alert(
+        "Gagal memproses permintaan",
+        requestError instanceof Error ? requestError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
 
   return (
     <ScreenShell
       role="reporter"
       activeTab="home"
-      eyebrow="User - Home - Detail Keluarga"
       title="Keluarga"
       subtitle="Status sensor, aktivitas terakhir, dan kondisi terkini."
       action={
@@ -53,46 +76,102 @@ export default function ReporterFamilyDetail() {
         </Card>
       ) : (
         <View style={styles.list}>
-          {members.map((member) => (
-            <Card key={member.id} style={styles.memberCard}>
-            <View style={styles.memberHeader}>
-              <View style={styles.memberAvatar}>
-                <MaterialCommunityIcons
-                  name="account-heart-outline"
-                  size={22}
-                  color={colors.secondary}
+          {members.map((member) => {
+            const isIncomingRequest =
+              member.member_id === profile?.id && member.status === "pending";
+            const isOutgoingRequest =
+              member.owner_id === profile?.id && member.status === "pending";
+            const displayProfile = getDisplayProfile(member, profile?.id);
+
+            return (
+              <Card key={member.id} style={styles.memberCard}>
+              <View style={styles.memberHeader}>
+                <View style={styles.memberAvatar}>
+                  <MaterialCommunityIcons
+                    name={
+                      isIncomingRequest
+                        ? "account-arrow-left-outline"
+                        : "account-heart-outline"
+                    }
+                    size={22}
+                    color={colors.secondary}
+                  />
+                </View>
+                <View style={styles.memberText}>
+                  <Text style={styles.memberName}>
+                    {displayProfile?.full_name ?? "Anggota keluarga"}
+                  </Text>
+                  <Text style={styles.memberNote}>
+                    ID: {displayProfile?.user_code ?? displayProfile?.id ?? "-"}
+                  </Text>
+                </View>
+                <StatusPill
+                  label={getStatusLabel(member, profile?.id)}
+                  tone={
+                    member.status === "accepted"
+                      ? "success"
+                      : member.status === "rejected"
+                        ? "danger"
+                        : "warning"
+                  }
                 />
               </View>
-              <View style={styles.memberText}>
-                <Text style={styles.memberName}>
-                  {member.member?.full_name ?? "Anggota keluarga"}
-                </Text>
-                <Text style={styles.memberNote}>
-                  ID: {member.member?.user_code ?? member.member_id}
-                </Text>
+              <View style={styles.metrics}>
+                {[
+                  member.relationship_label ?? "Keluarga",
+                  isIncomingRequest
+                    ? "Permintaan masuk"
+                    : isOutgoingRequest
+                      ? "Menunggu diterima"
+                      : member.accepted_at
+                        ? "Sudah terhubung"
+                        : member.status,
+                ].map((metric) => (
+                  <View key={metric} style={styles.metricChip}>
+                    <Text style={styles.metricText}>{metric}</Text>
+                  </View>
+                ))}
               </View>
-              <StatusPill
-                label={member.status === "accepted" ? "Aman" : "Menunggu"}
-                tone={member.status === "accepted" ? "success" : "warning"}
-              />
-            </View>
-            <View style={styles.metrics}>
-              {[
-                member.relationship_label ?? "Keluarga",
-                member.status,
-                member.accepted_at ? "Sudah terhubung" : "Menunggu konfirmasi",
-              ].map((metric) => (
-                <View key={metric} style={styles.metricChip}>
-                  <Text style={styles.metricText}>{metric}</Text>
+
+              {isIncomingRequest && (
+                <View style={styles.requestActions}>
+                  <PrimaryAction
+                    label="Tolak"
+                    tone="soft"
+                    style={styles.requestButton}
+                    onPress={() => handleRequest(member.id, "rejected")}
+                  />
+                  <PrimaryAction
+                    label="Terima"
+                    icon="check"
+                    tone="secondary"
+                    style={styles.requestButton}
+                    onPress={() => handleRequest(member.id, "accepted")}
+                  />
                 </View>
-              ))}
-            </View>
-            </Card>
-          ))}
+              )}
+              </Card>
+            );
+          })}
         </View>
       )}
     </ScreenShell>
   );
+}
+
+function getDisplayProfile(member: FamilyMemberWithProfile, currentUserId?: string) {
+  if (member.owner_id === currentUserId) {
+    return member.member;
+  }
+
+  return member.owner;
+}
+
+function getStatusLabel(member: FamilyMemberWithProfile, currentUserId?: string) {
+  if (member.status === "accepted") return "Aman";
+  if (member.status === "rejected") return "Ditolak";
+  if (member.member_id === currentUserId) return "Perlu respon";
+  return "Menunggu";
 }
 
 const styles = StyleSheet.create({
@@ -158,5 +237,12 @@ const styles = StyleSheet.create({
   metricText: {
     fontSize: 11,
     color: colors.text,
+  },
+  requestActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  requestButton: {
+    flex: 1,
   },
 });

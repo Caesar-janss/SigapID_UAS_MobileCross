@@ -1,5 +1,7 @@
-import { Href } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import { useEmergencyActions, useEmergencyReport } from "@/hooks/useEmergencyReports";
+import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -9,16 +11,79 @@ import {
   PrimaryAction,
   ScreenShell,
   StatusPill,
-  navigateTo,
 } from "@/components/app/MockAppUI";
 
 export default function OperatorReportDetail() {
+  const params = useLocalSearchParams<{ reportId?: string }>();
+  const { report, loading, error } = useEmergencyReport(params.reportId);
+  const { acceptReport, finishReport } = useEmergencyActions();
+
+  const handleFinish = async () => {
+    if (!report?.id) return;
+
+    try {
+      await finishReport(report.id);
+      router.replace("/operator/history");
+    } catch (finishError) {
+      Alert.alert(
+        "Gagal menyelesaikan laporan",
+        finishError instanceof Error ? finishError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const handleOpenChat = async () => {
+    if (!report?.id) return;
+
+    try {
+      await acceptReport(report.id);
+      router.push({
+        pathname: "/operator/chat",
+        params: { reportId: report.id },
+      });
+    } catch (acceptError) {
+      Alert.alert(
+        "Gagal membuka chat",
+        acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  if (loading) {
+    return (
+      <ScreenShell
+        role="operator"
+        title="Memuat Detail"
+        subtitle="Mengambil detail laporan dari backend."
+      >
+        <Card>
+          <Text style={styles.reporterMeta}>Sebentar, data sedang dimuat.</Text>
+        </Card>
+      </ScreenShell>
+    );
+  }
+
+  if (error || !report) {
+    return (
+      <ScreenShell
+        role="operator"
+        title="Laporan Tidak Ditemukan"
+        subtitle={error ?? "Pilih laporan dari dashboard operator."}
+      >
+        <PrimaryAction
+          label="Kembali"
+          tone="secondary"
+          onPress={() => router.replace("/operator/dashboard")}
+        />
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell
       role="operator"
-      eyebrow="Dispatcher - Home - Detail"
       title="Detail Laporan"
-      subtitle="Insiden aktif dengan informasi prioritas dan kontak cepat."
+      subtitle={`Masuk ${formatRelativeTime(report.created_at)} - ${emergencyStatusLabel(report.status)}`}
       action={
         <IconButton
           icon="dots-horizontal"
@@ -31,32 +96,34 @@ export default function OperatorReportDetail() {
 
       <InfoGrid
         items={[
-          { label: "Jenis", value: "Medis" },
-          { label: "Prioritas", value: "Tinggi" },
-          { label: "Lokasi", value: "Jl. Melati 18" },
-          { label: "Masuk", value: "09:41 WIB" },
+          { label: "Jenis", value: emergencyTypeLabel(report.type) },
+          { label: "Prioritas", value: report.priority },
+          { label: "Status", value: emergencyStatusLabel(report.status) },
+          { label: "Masuk", value: formatRelativeTime(report.created_at) },
         ]}
       />
 
       <Card style={styles.reporterCard}>
         <View style={styles.reporterHeader}>
           <View style={styles.reporterText}>
-            <Text style={styles.reporterName}>Alya Permata</Text>
+            <Text style={styles.reporterName}>
+              {report.reporter?.full_name ?? "Pelapor"}
+            </Text>
             <Text style={styles.reporterMeta}>
-              Perempuan - 27 tahun - Kontak darurat tersimpan
+              {report.reporter?.phone || report.reporter?.email || "Kontak belum tersedia"}
             </Text>
           </View>
-          <StatusPill label="Darurat" tone="danger" />
+          <StatusPill label={emergencyTypeLabel(report.type)} tone="danger" />
         </View>
         <View style={styles.tags}>
           <View style={styles.tag}>
-            <Text style={styles.tagText}>+62 812-4456-1123</Text>
+            <Text style={styles.tagText}>{report.call_room ?? "Call room belum ada"}</Text>
           </View>
           <View style={styles.tag}>
-            <Text style={styles.tagText}>Respons lambat</Text>
+            <Text style={styles.tagText}>{report.sensor_detected ? "Sensor aktif" : "Manual"}</Text>
           </View>
           <View style={styles.tag}>
-            <Text style={styles.tagText}>Detak jantung naik</Text>
+            <Text style={styles.tagText}>{report.description ?? report.title ?? "Tanpa catatan"}</Text>
           </View>
         </View>
       </Card>
@@ -67,21 +134,21 @@ export default function OperatorReportDetail() {
           icon="phone"
           tone="soft"
           style={styles.quickButton}
-          onPress={() => Alert.alert("Call", "Simulasi panggilan.")}
+          onPress={() => Alert.alert("Call", `Ruang panggilan: ${report.call_room ?? "-"}`)}
         />
         <PrimaryAction
           label="Message"
           icon="message-outline"
           tone="soft"
           style={styles.quickButton}
-          onPress={() => navigateTo("/operator/chat" as Href)}
+          onPress={handleOpenChat}
         />
         <PrimaryAction
-          label="Voice"
-          icon="microphone"
-          tone="soft"
+          label="Selesai"
+          icon="check-circle-outline"
+          tone="secondary"
           style={styles.quickButton}
-          onPress={() => Alert.alert("Voice", "Simulasi suara.")}
+          onPress={handleFinish}
         />
       </View>
     </ScreenShell>

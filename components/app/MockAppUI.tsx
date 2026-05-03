@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleProp,
@@ -90,7 +91,6 @@ export function showComingSoon(label: string) {
 export function ScreenShell({
   role,
   activeTab,
-  eyebrow,
   title,
   subtitle,
   action,
@@ -99,7 +99,6 @@ export function ScreenShell({
 }: {
   role: Role;
   activeTab?: ReporterTab | OperatorTab;
-  eyebrow: string;
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
@@ -110,7 +109,6 @@ export function ScreenShell({
     <View style={[styles.content, !scroll && styles.contentFixed]}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>{eyebrow}</Text>
           <Text style={styles.title}>{title}</Text>
           {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
         </View>
@@ -284,13 +282,18 @@ export function Avatar({
   name,
   tone = "primary",
   size = 48,
+  imageUri,
+  onPress,
 }: {
   name: string;
   tone?: "primary" | "secondary";
   size?: number;
+  imageUri?: string | null;
+  onPress?: () => void;
 }) {
   const initial = name.trim().charAt(0).toUpperCase() || "U";
-  return (
+
+  const avatar = (
     <View
       style={[
         styles.avatar,
@@ -302,15 +305,39 @@ export function Avatar({
         },
       ]}
     >
-      <Text
-        style={[
-          styles.avatarText,
-          { color: tone === "primary" ? colors.primary : colors.secondary },
-        ]}
-      >
-        {initial}
-      </Text>
+      {imageUri ? (
+        <Image
+          source={{ uri: imageUri }}
+          style={[
+            styles.avatarImage,
+            {
+              width: size,
+              height: size,
+              borderRadius: Math.min(28, size / 3),
+            },
+          ]}
+        />
+      ) : (
+        <Text
+          style={[
+            styles.avatarText,
+            { color: tone === "primary" ? colors.primary : colors.secondary },
+          ]}
+        >
+          {initial}
+        </Text>
+      )}
     </View>
+  );
+
+  if (!onPress) {
+    return avatar;
+  }
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
+      {avatar}
+    </Pressable>
   );
 }
 
@@ -545,6 +572,10 @@ const styles = StyleSheet.create({
   avatar: {
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    resizeMode: "cover",
   },
   avatarText: {
     fontSize: 16,

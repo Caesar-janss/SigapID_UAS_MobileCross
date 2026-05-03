@@ -155,6 +155,30 @@ create index if not exists operator_assignments_operator_id_idx on public.operat
 create index if not exists operator_assignments_report_id_idx on public.operator_assignments(report_id);
 create index if not exists messages_report_id_created_at_idx on public.messages(report_id, created_at);
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'emergency_reports'
+  ) then
+    alter publication supabase_realtime add table public.emergency_reports;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end;
+$$;
+
 create or replace function public.touch_updated_at()
 returns trigger
 language plpgsql
@@ -210,6 +234,83 @@ as $$
   limit 1;
 $$;
 
+create or replace function public.has_report_assignment(
+  target_report_id uuid,
+  target_operator_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.operator_assignments
+    where operator_assignments.report_id = target_report_id
+      and operator_assignments.operator_id = target_operator_id
+      and operator_assignments.status in ('assigned', 'accepted', 'completed')
+  );
+$$;
+
+create or replace function public.is_report_owner(target_report_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.emergency_reports
+    where emergency_reports.id = target_report_id
+      and (
+        emergency_reports.reporter_id = auth.uid()
+        or emergency_reports.subject_profile_id = auth.uid()
+      )
+  );
+$$;
+
+create or replace function public.can_access_report(target_report_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.emergency_reports
+    where emergency_reports.id = target_report_id
+      and (
+        emergency_reports.reporter_id = auth.uid()
+        or emergency_reports.subject_profile_id = auth.uid()
+        or emergency_reports.assigned_operator_id = auth.uid()
+      )
+  )
+  or public.has_report_assignment(target_report_id, auth.uid());
+$$;
+
+create or replace function public.can_read_profile_from_report(target_profile_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.emergency_reports
+    where (
+      emergency_reports.reporter_id = auth.uid()
+      or emergency_reports.subject_profile_id = auth.uid()
+      or emergency_reports.assigned_operator_id = auth.uid()
+      or public.has_report_assignment(emergency_reports.id, auth.uid())
+    )
+    and target_profile_id in (
+      emergency_reports.reporter_id,
+      emergency_reports.subject_profile_id,
+      emergency_reports.assigned_operator_id
+    )
+  );
+$$;
+
 create or replace function public.assign_operator_to_report(target_report_id uuid)
 returns uuid
 language plpgsql
@@ -240,6 +341,8 @@ begin
     and operator_assignments.status in ('assigned', 'accepted')
   where profiles.role = 'dispatcher'
     and profiles.is_available = true
+    and profiles.last_active_at is not null
+    and profiles.last_active_at >= now() - interval '5 minutes'
   group by profiles.id
   order by active_workload asc, random()
   limit 1;
@@ -272,6 +375,86 @@ begin
 end;
 $$;
 
+create or replace function public.claim_report_for_operator(target_report_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  existing_operator_id uuid;
+  chosen_workload integer;
+begin
+  if not exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'dispatcher'
+      and profiles.is_available = true
+      and profiles.last_active_at is not null
+      and profiles.last_active_at >= now() - interval '5 minutes'
+  ) then
+    raise exception 'Operator belum online.';
+  end if;
+
+  select emergency_reports.assigned_operator_id
+  into existing_operator_id
+  from public.emergency_reports
+  where emergency_reports.id = target_report_id
+  for update;
+
+  if not found then
+    raise exception 'Laporan tidak ditemukan.';
+  end if;
+
+  if existing_operator_id is not null and existing_operator_id <> auth.uid() then
+    raise exception 'Laporan sudah ditangani operator lain.';
+  end if;
+
+  select count(operator_assignments.id)::integer
+  into chosen_workload
+  from public.operator_assignments
+  where operator_assignments.operator_id = auth.uid()
+    and operator_assignments.status in ('assigned', 'accepted');
+
+  insert into public.operator_assignments (
+    report_id,
+    operator_id,
+    status,
+    assigned_by,
+    workload_snapshot,
+    accepted_at
+  )
+  values (
+    target_report_id,
+    auth.uid(),
+    'accepted',
+    'operator',
+    coalesce(chosen_workload, 0),
+    now()
+  )
+  on conflict (report_id, operator_id)
+  do update
+  set
+    status = 'accepted',
+    accepted_at = coalesce(operator_assignments.accepted_at, now());
+
+  update public.emergency_reports
+  set
+    assigned_operator_id = auth.uid(),
+    status = 'accepted',
+    accepted_at = coalesce(accepted_at, now()),
+    dispatched_at = coalesce(dispatched_at, now())
+  where id = target_report_id
+    and (
+      assigned_operator_id is null
+      or assigned_operator_id = auth.uid()
+    );
+
+  return auth.uid();
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.family_members enable row level security;
 alter table public.emergency_reports enable row level security;
@@ -286,7 +469,73 @@ grant select, insert, update on public.operator_assignments to authenticated;
 grant select, insert, update on public.messages to authenticated;
 grant execute on function public.find_profile_by_user_code(text) to authenticated;
 grant execute on function public.current_user_role() to authenticated;
+grant execute on function public.has_report_assignment(uuid, uuid) to authenticated;
+grant execute on function public.is_report_owner(uuid) to authenticated;
+grant execute on function public.can_access_report(uuid) to authenticated;
+grant execute on function public.can_read_profile_from_report(uuid) to authenticated;
 grant execute on function public.assign_operator_to_report(uuid) to authenticated;
+grant execute on function public.claim_report_for_operator(uuid) to authenticated;
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'profile-avatars',
+  'profile-avatars',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Profile avatars are public" on storage.objects;
+create policy "Profile avatars are public"
+on storage.objects
+for select
+to public
+using (bucket_id = 'profile-avatars');
+
+drop policy if exists "Users can upload their profile avatar" on storage.objects;
+create policy "Users can upload their profile avatar"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'profile-avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "Users can update their profile avatar" on storage.objects;
+create policy "Users can update their profile avatar"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'profile-avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'profile-avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "Users can delete their profile avatar" on storage.objects;
+create policy "Users can delete their profile avatar"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'profile-avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
 
 drop policy if exists "Users can read their own profile" on public.profiles;
 create policy "Users can read their own profile"
@@ -304,7 +553,7 @@ using (
   exists (
     select 1
     from public.family_members
-    where family_members.status = 'accepted'
+    where family_members.status in ('pending', 'accepted')
       and (
         (family_members.owner_id = auth.uid() and family_members.member_id = profiles.id)
         or
@@ -314,6 +563,12 @@ using (
 );
 
 drop policy if exists "Operators can read profiles from assigned reports" on public.profiles;
+drop policy if exists "Participants can read profiles from active reports" on public.profiles;
+create policy "Participants can read profiles from active reports"
+on public.profiles
+for select
+to authenticated
+using (public.can_read_profile_from_report(profiles.id));
 
 drop policy if exists "Users can create their own profile" on public.profiles;
 create policy "Users can create their own profile"
@@ -390,12 +645,7 @@ for select
 to authenticated
 using (
   assigned_operator_id = auth.uid()
-  or exists (
-    select 1
-    from public.operator_assignments
-    where operator_assignments.report_id = emergency_reports.id
-      and operator_assignments.operator_id = auth.uid()
-  )
+  or public.has_report_assignment(emergency_reports.id, auth.uid())
 );
 
 drop policy if exists "Operators can read pending reports for queue" on public.emergency_reports;
@@ -413,22 +663,12 @@ to authenticated
 using (
   auth.uid() = reporter_id
   or assigned_operator_id = auth.uid()
-  or exists (
-    select 1
-    from public.operator_assignments
-    where operator_assignments.report_id = emergency_reports.id
-      and operator_assignments.operator_id = auth.uid()
-  )
+  or public.has_report_assignment(emergency_reports.id, auth.uid())
 )
 with check (
   auth.uid() = reporter_id
   or assigned_operator_id = auth.uid()
-  or exists (
-    select 1
-    from public.operator_assignments
-    where operator_assignments.report_id = emergency_reports.id
-      and operator_assignments.operator_id = auth.uid()
-  )
+  or public.has_report_assignment(emergency_reports.id, auth.uid())
 );
 
 drop policy if exists "Operators can read their assignments" on public.operator_assignments;
@@ -438,12 +678,7 @@ for select
 to authenticated
 using (
   operator_id = auth.uid()
-  or exists (
-    select 1
-    from public.emergency_reports
-    where emergency_reports.id = operator_assignments.report_id
-      and emergency_reports.reporter_id = auth.uid()
-  )
+  or public.is_report_owner(operator_assignments.report_id)
 );
 
 drop policy if exists "Operators can create their assignments" on public.operator_assignments;
@@ -466,24 +701,7 @@ create policy "Participants can read report messages"
 on public.messages
 for select
 to authenticated
-using (
-  exists (
-    select 1
-    from public.emergency_reports
-    where emergency_reports.id = messages.report_id
-      and (
-        emergency_reports.reporter_id = auth.uid()
-        or emergency_reports.subject_profile_id = auth.uid()
-        or emergency_reports.assigned_operator_id = auth.uid()
-      )
-  )
-  or exists (
-    select 1
-    from public.operator_assignments
-    where operator_assignments.report_id = messages.report_id
-      and operator_assignments.operator_id = auth.uid()
-  )
-);
+using (public.can_access_report(messages.report_id));
 
 drop policy if exists "Participants can send report messages" on public.messages;
 create policy "Participants can send report messages"
@@ -492,24 +710,7 @@ for insert
 to authenticated
 with check (
   sender_id = auth.uid()
-  and (
-    exists (
-      select 1
-      from public.emergency_reports
-      where emergency_reports.id = messages.report_id
-        and (
-          emergency_reports.reporter_id = auth.uid()
-          or emergency_reports.subject_profile_id = auth.uid()
-          or emergency_reports.assigned_operator_id = auth.uid()
-        )
-    )
-    or exists (
-      select 1
-      from public.operator_assignments
-      where operator_assignments.report_id = messages.report_id
-        and operator_assignments.operator_id = auth.uid()
-    )
-  )
+  and public.can_access_report(messages.report_id)
 );
 
 drop policy if exists "Participants can mark messages read" on public.messages;
@@ -517,30 +718,8 @@ create policy "Participants can mark messages read"
 on public.messages
 for update
 to authenticated
-using (
-  exists (
-    select 1
-    from public.emergency_reports
-    where emergency_reports.id = messages.report_id
-      and (
-        emergency_reports.reporter_id = auth.uid()
-        or emergency_reports.subject_profile_id = auth.uid()
-        or emergency_reports.assigned_operator_id = auth.uid()
-      )
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.emergency_reports
-    where emergency_reports.id = messages.report_id
-      and (
-        emergency_reports.reporter_id = auth.uid()
-        or emergency_reports.subject_profile_id = auth.uid()
-        or emergency_reports.assigned_operator_id = auth.uid()
-      )
-  )
-);
+using (public.can_access_report(messages.report_id))
+with check (public.can_access_report(messages.report_id));
 
 create or replace function public.handle_new_user()
 returns trigger

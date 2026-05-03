@@ -8,6 +8,17 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import {
+  useEmergencyActions,
+  useEmergencyChat,
+  useEmergencyReport,
+  useReporterReports,
+} from "@/hooks/useEmergencyReports";
+import { useAuth } from "@/hooks/useAuth";
+import { emergencyStatusLabel } from "@/utils/format";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -19,13 +30,90 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function ReporterChat() {
+  const params = useLocalSearchParams<{ reportId?: string }>();
+  const { profile } = useAuth();
+  const { activeReport } = useReporterReports();
+  const reportId = params.reportId ?? activeReport?.id;
+  const { report } = useEmergencyReport(reportId);
+  const { messages, loading, error, sending, sendMessage, reload } =
+    useEmergencyChat(reportId);
+  const { finishReport } = useEmergencyActions();
+  const [draft, setDraft] = useState("");
+  const visibleMessages = messages.filter((message) => message.kind !== "system");
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollToLatest = useCallback((animated = true) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      reload({ silent: true });
+      scrollToLatest(false);
+    }, [reload, scrollToLatest]),
+  );
+
+  useEffect(() => {
+    scrollToLatest();
+  }, [scrollToLatest, visibleMessages.length]);
+
+  const handleSend = async () => {
+    try {
+      await sendMessage(draft);
+      setDraft("");
+    } catch (sendError) {
+      Alert.alert(
+        "Gagal mengirim pesan",
+        sendError instanceof Error ? sendError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const handleVoice = async () => {
+    try {
+      await sendMessage("Pelapor mengirim pesan suara.", "voice", {
+        voiceDurationSeconds: 10,
+      });
+    } catch (sendError) {
+      Alert.alert(
+        "Voice gagal",
+        sendError instanceof Error ? sendError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const handleFinish = async () => {
+    if (!reportId) return;
+
+    try {
+      await finishReport(reportId);
+      router.replace("/reporter/history");
+    } catch (finishError) {
+      Alert.alert(
+        "Gagal menyelesaikan laporan",
+        finishError instanceof Error ? finishError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
   return (
     <ScreenShell
       role="reporter"
-      eyebrow="User - Tracking - Pesan"
-      title="Alya Permata"
-      subtitle="Terhubung dengan dispatcher"
-      action={<IconButton icon="phone" tone="secondary" />}
+      title={report?.assigned_operator?.full_name ?? "Operator"}
+      subtitle={
+        report
+          ? `Terhubung - ${emergencyStatusLabel(report.status)}`
+          : "Pilih laporan aktif untuk mulai chat"
+      }
+      action={
+        <IconButton
+          icon="phone"
+          tone="secondary"
+          onPress={() => Alert.alert("Call", "Fitur panggilan sedang disiapkan.")}
+        />
+      }
       scroll={false}
     >
       <KeyboardAvoidingView
@@ -33,44 +121,51 @@ export default function ReporterChat() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={12}
       >
-        <Card style={styles.alertCard}>
-          <Text style={styles.alertText}>
-            Status darurat aktif. Bantuan sedang menuju. Tetap tenang dan balas
-            jika memungkinkan.
-          </Text>
-        </Card>
+        {!!error && <Text style={styles.errorText}>Chat gagal dimuat.</Text>}
 
         <ScrollView
+          ref={scrollRef}
           style={styles.messages}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scrollToLatest(false)}
         >
-          <ChatBubble>
-            Halo, ini pusat bantuan. Apakah Anda bisa memberi tahu kondisi saat
-            ini?
-          </ChatBubble>
-          <ChatBubble mine>
-            Saya sesak napas dan sulit berdiri. Saya ada di depan minimarket.
-          </ChatBubble>
-          <ChatBubble>
-            Baik, unit medis sudah menuju lokasi Anda. Mohon tetap di tempat
-            yang aman.
-          </ChatBubble>
-          <Card style={styles.voiceBubble}>
-            <View style={styles.playButton}>
-              <MaterialCommunityIcons
-                name="play"
-                size={20}
-                color={colors.textInverse}
-              />
-            </View>
-            <View>
-              <Text style={styles.voiceTitle}>Pesan suara</Text>
-              <Text style={styles.voiceTime}>00:18 detik</Text>
-            </View>
-          </Card>
-          <ChatBubble mine>Baik, saya tunggu. Terima kasih.</ChatBubble>
+          {loading ? (
+            <Text style={styles.emptyText}>Memuat pesan...</Text>
+          ) : visibleMessages.length === 0 ? (
+            <Text style={styles.emptyText}>Belum ada pesan. Sapa operator dulu.</Text>
+          ) : (
+            visibleMessages.map((message) =>
+              message.kind === "voice" ? (
+                <Card
+                  key={message.id}
+                  style={[
+                    styles.voiceBubble,
+                    message.sender_id === profile?.id && styles.voiceBubbleMine,
+                  ]}
+                >
+                  <View style={styles.playButton}>
+                    <MaterialCommunityIcons
+                      name="play"
+                      size={20}
+                      color={colors.textInverse}
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.voiceTitle}>{message.body ?? "Pesan suara"}</Text>
+                    <Text style={styles.voiceTime}>
+                      {message.voice_duration_seconds ?? 0} detik
+                    </Text>
+                  </View>
+                </Card>
+              ) : (
+                <ChatBubble key={message.id} mine={message.sender_id === profile?.id}>
+                  {message.body}
+                </ChatBubble>
+              ),
+            )
+          )}
         </ScrollView>
 
         <View style={styles.composer}>
@@ -80,14 +175,21 @@ export default function ReporterChat() {
               icon="microphone"
               tone="soft"
               style={styles.quickButton}
-              onPress={() => Alert.alert("Voice", "Simulasi pesan suara.")}
+              onPress={handleVoice}
             />
             <PrimaryAction
               label="Call"
               icon="phone"
               tone="secondary"
               style={styles.quickButton}
-              onPress={() => Alert.alert("Call", "Simulasi panggilan.")}
+              onPress={() => Alert.alert("Call", "Fitur panggilan sedang disiapkan.")}
+            />
+            <PrimaryAction
+              label="Selesai"
+              icon="check-circle-outline"
+              tone="danger"
+              style={styles.quickButton}
+              onPress={handleFinish}
             />
           </View>
 
@@ -101,13 +203,21 @@ export default function ReporterChat() {
               style={styles.input}
               placeholder="Tulis pesan..."
               placeholderTextColor={colors.textSubtle}
+              value={draft}
+              onChangeText={setDraft}
+              editable={!sending && !!reportId}
             />
             <MaterialCommunityIcons
               name="paperclip"
               size={20}
               color={colors.text}
             />
-            <MaterialCommunityIcons name="send" size={20} color={colors.text} />
+            <MaterialCommunityIcons
+              name="send"
+              size={20}
+              color={colors.text}
+              onPress={handleSend}
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -121,14 +231,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     minHeight: 0,
   },
-  alertCard: {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#BBF7D0",
-  },
-  alertText: {
+  errorText: {
     ...typography.caption,
-    color: "#047857",
-    lineHeight: 19,
+    color: colors.danger,
+    textAlign: "center",
   },
   messages: {
     flex: 1,
@@ -144,6 +250,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  voiceBubbleMine: {
+    alignSelf: "flex-end",
+    backgroundColor: "#E8F4FF",
+    borderColor: "#BFDBFE",
+  },
+  emptyText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: "center",
   },
   playButton: {
     width: 42,

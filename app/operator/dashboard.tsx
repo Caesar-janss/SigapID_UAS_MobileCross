@@ -1,5 +1,7 @@
-import { Href } from "expo-router";
+import { router } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import { useEmergencyActions, useOperatorReports } from "@/hooks/useEmergencyReports";
+import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -8,62 +10,64 @@ import {
   PrimaryAction,
   ScreenShell,
   StatusPill,
-  navigateTo,
 } from "@/components/app/MockAppUI";
 
-const incomingReports = [
-  {
-    title: "Medis - Prioritas Tinggi",
-    reporter: "Alya Permata",
-    time: "09:41 WIB",
-    status: "Baru",
-    tone: "danger",
-  },
-  {
-    title: "Kebakaran - Area Pemukiman",
-    reporter: "Rima Nugra",
-    time: "09:36 WIB",
-    status: "Proses",
-    tone: "warning",
-  },
-  {
-    title: "Kriminal - Jalan Sepi",
-    reporter: "Nanda Kirana",
-    time: "09:30 WIB",
-    status: "Ditangani",
-    tone: "success",
-  },
-] as const;
-
 export default function OperatorDashboard() {
+  const { activeReports, loading, error } = useOperatorReports();
+  const { acceptReport } = useEmergencyActions();
+
+  const handleAccept = async (reportId: string) => {
+    try {
+      await acceptReport(reportId);
+      router.push({ pathname: "/operator/chat", params: { reportId } });
+    } catch (acceptError) {
+      Alert.alert(
+        "Gagal menerima laporan",
+        acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
   return (
     <ScreenShell
       role="operator"
       activeTab="home"
-      eyebrow="Dispatcher - Home"
       title="Laporan Masuk"
       subtitle="Prioritas laporan disusun untuk operator yang paling siap."
       action={<IconButton icon="bell-outline" tone="secondary" />}
     >
       <View style={styles.list}>
-        {incomingReports.map((report) => (
-          <Card key={report.title} style={styles.reportCard}>
+        {loading ? (
+          <Card>
+            <Text style={styles.reportMeta}>Memuat laporan masuk...</Text>
+          </Card>
+        ) : error ? (
+          <Card>
+            <Text style={styles.reportMeta}>Data laporan gagal dimuat: {error}</Text>
+          </Card>
+        ) : activeReports.length === 0 ? (
+          <Card>
+            <Text style={styles.reportTitle}>Belum ada laporan aktif</Text>
+            <Text style={styles.reportMeta}>
+              Laporan baru akan muncul otomatis saat pelapor mengirim darurat.
+            </Text>
+          </Card>
+        ) : (
+          activeReports.map((report) => (
+          <Card key={report.id} style={styles.reportCard}>
             <View style={styles.reportHeader}>
               <View style={styles.reportText}>
-                <Text style={styles.reportTitle}>{report.title}</Text>
+                <Text style={styles.reportTitle}>
+                  {report.title ?? emergencyTypeLabel(report.type)}
+                </Text>
                 <Text style={styles.reportMeta}>
-                  Pelapor: {report.reporter} - {report.time}
+                  Pelapor: {report.reporter?.full_name ?? "Pelapor"} -{" "}
+                  {formatRelativeTime(report.created_at)}
                 </Text>
               </View>
               <StatusPill
-                label={report.status}
-                tone={
-                  report.tone === "danger"
-                    ? "danger"
-                    : report.tone === "warning"
-                      ? "warning"
-                      : "success"
-                }
+                label={emergencyStatusLabel(report.status)}
+                tone={report.status === "pending" ? "warning" : "success"}
               />
             </View>
 
@@ -75,25 +79,38 @@ export default function OperatorDashboard() {
                 icon="phone"
                 tone="soft"
                 style={styles.action}
-                onPress={() => Alert.alert("Call", "Simulasi panggilan pelapor.")}
+                onPress={() =>
+                  Alert.alert(
+                    "Call",
+                    `Ruang panggilan: ${report.call_room ?? "belum tersedia"}.`,
+                  )
+                }
               />
               <PrimaryAction
                 label="Chat"
                 icon="message-outline"
                 tone="soft"
                 style={styles.action}
-                onPress={() => navigateTo("/operator/chat" as Href)}
+                onPress={() => handleAccept(report.id)}
               />
               <PrimaryAction
-                label="Detail"
-                icon="file-search-outline"
+                label={report.status === "pending" ? "Terima" : "Detail"}
+                icon={report.status === "pending" ? "check-circle-outline" : "file-search-outline"}
                 tone="secondary"
                 style={styles.action}
-                onPress={() => navigateTo("/operator/report-detail" as Href)}
+                onPress={() =>
+                  report.status === "pending"
+                    ? handleAccept(report.id)
+                    : router.push({
+                        pathname: "/operator/report-detail",
+                        params: { reportId: report.id },
+                      })
+                }
               />
             </View>
           </Card>
-        ))}
+        ))
+        )}
       </View>
     </ScreenShell>
   );

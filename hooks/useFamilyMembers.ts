@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { FamilyMemberWithProfile } from "@/types";
+import { FamilyMemberStatus, FamilyMemberWithProfile } from "@/types";
 import { supabase } from "@/utils/supabase";
 
 export function useFamilyMembers() {
@@ -30,6 +30,14 @@ export function useFamilyMembers() {
             phone,
             email,
             avatar_url
+          ),
+          owner:profiles!family_members_owner_id_fkey (
+            id,
+            user_code,
+            full_name,
+            phone,
+            email,
+            avatar_url
           )
         `,
       )
@@ -45,6 +53,7 @@ export function useFamilyMembers() {
     const normalizedMembers = (data ?? []).map((member) => ({
       ...member,
       member: Array.isArray(member.member) ? member.member[0] : member.member,
+      owner: Array.isArray(member.owner) ? member.owner[0] : member.owner,
     }));
 
     setMembers(normalizedMembers as unknown as FamilyMemberWithProfile[]);
@@ -55,5 +64,24 @@ export function useFamilyMembers() {
     loadMembers();
   }, [loadMembers]);
 
-  return { members, loading, error, reload: loadMembers };
+  const updateRequestStatus = useCallback(
+    async (memberId: string, status: Extract<FamilyMemberStatus, "accepted" | "rejected">) => {
+      const { error: updateError } = await supabase
+        .from("family_members")
+        .update({
+          status,
+          accepted_at: status === "accepted" ? new Date().toISOString() : null,
+        })
+        .eq("id", memberId);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      await loadMembers();
+    },
+    [loadMembers],
+  );
+
+  return { members, loading, error, reload: loadMembers, updateRequestStatus };
 }

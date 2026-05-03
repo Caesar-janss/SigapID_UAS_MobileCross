@@ -1,20 +1,43 @@
-import { Href } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Href, router } from "expo-router";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useEmergencyActions } from "@/hooks/useEmergencyReports";
 import { colors, shadow, spacing, typography } from "@/theme";
 import {
   IconButton,
   PrimaryAction,
   ScreenShell,
   navigateTo,
-  showComingSoon,
 } from "@/components/app/MockAppUI";
 
 export default function ReporterEmergencyAlert() {
+  const { createReport } = useEmergencyActions();
+
+  const handleSensorReport = async () => {
+    try {
+      const report = await createReport({
+        type: "medical",
+        title: "Medis - Deteksi Guncangan",
+        description: "Sensor mendeteksi guncangan keras dan pelapor meminta bantuan.",
+        priority: "critical",
+        sensorDetected: true,
+      });
+
+      router.replace({
+        pathname: "/reporter/tracking",
+        params: { reportId: report.id },
+      });
+    } catch (error) {
+      Alert.alert(
+        "Gagal mengirim bantuan",
+        error instanceof Error ? error.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
   return (
     <ScreenShell
       role="reporter"
-      eyebrow="Emergency Alert"
       title="Peringatan Darurat"
       subtitle="Sensor mendeteksi kondisi tidak biasa."
       action={<IconButton icon="close" onPress={() => navigateTo("/reporter/tracking" as Href)} />}
@@ -43,7 +66,7 @@ export default function ReporterEmergencyAlert() {
           label="Ya, kirim bantuan sekarang"
           icon="ambulance"
           tone="danger"
-          onPress={() => showComingSoon("Bantuan medis otomatis")}
+          onPress={handleSensorReport}
         />
         <PrimaryAction
           label="Batalkan"

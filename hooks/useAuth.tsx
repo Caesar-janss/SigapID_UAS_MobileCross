@@ -295,6 +295,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     setState((current) => ({ ...current, loading: true }));
+
+    if (state.profile?.role === "dispatcher") {
+      await supabase
+        .from("profiles")
+        .update({ is_available: false })
+        .eq("id", state.profile.id);
+    }
+
     const { error } = await supabase.auth.signOut();
 
     if (error) {
@@ -308,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading: false,
       initializing: false,
     });
-  }, []);
+  }, [state.profile?.id, state.profile?.role]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
