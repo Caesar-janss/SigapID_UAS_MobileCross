@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const fallbackSupabaseUrl = "https://hcwelqlzetxtllvjgwdu.supabase.co";
+const fallbackSupabasePublishableKey =
+  "sb_publishable_Eo8nGBUXJmIgdVws9fDeDQ_R2fQrhNG";
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? fallbackSupabaseUrl;
+const supabasePublishableKey =
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  fallbackSupabasePublishableKey;
 
 if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(
@@ -9,4 +15,10 @@ if (!supabaseUrl || !supabasePublishableKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey);
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});

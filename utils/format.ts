@@ -1,6 +1,10 @@
 import { EmergencyStatus, EmergencyType } from "@/types";
 
 const emergencyTypeLabels: Record<EmergencyType, string> = {
+  fire: "Kebakaran",
+  medical: "Medis",
+  crime: "Kriminal",
+  disaster: "Bencana",
   police: "Polisi",
   ambulance: "Ambulans",
   firefighter: "Pemadam",
@@ -9,8 +13,10 @@ const emergencyTypeLabels: Record<EmergencyType, string> = {
 
 const emergencyStatusLabels: Record<EmergencyStatus, string> = {
   pending: "Menunggu",
+  assigned: "Ditugaskan",
   accepted: "Diterima",
   on_route: "Dalam perjalanan",
+  arrived: "Tiba",
   resolved: "Selesai",
   cancelled: "Dibatalkan",
   rejected: "Ditolak",

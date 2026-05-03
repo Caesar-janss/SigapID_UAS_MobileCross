@@ -14,6 +14,10 @@ interface Props {
 }
 
 const typeColor: Record<string, string> = {
+  fire: colors.firefighter,
+  medical: colors.ambulance,
+  crime: colors.police,
+  disaster: colors.warning,
   police: colors.police,
   ambulance: colors.ambulance,
   firefighter: colors.firefighter,
@@ -22,18 +26,31 @@ const typeColor: Record<string, string> = {
 
 const statusBg: Record<string, string> = {
   pending: "#FEE2E2",
+  assigned: "#E0F2FE",
   accepted: "#DBEAFE",
   on_route: "#FEF3C7",
+  arrived: "#DCFCE7",
+  resolved: "#DCFCE7",
 };
 
 const statusText: Record<string, string> = {
   pending: colors.danger,
+  assigned: colors.info,
   accepted: colors.secondary,
   on_route: "#92400E",
+  arrived: colors.success,
+  resolved: colors.success,
 };
 
 export const EmergencyCard: React.FC<Props> = ({ emergency, onPress }) => {
   const isUrgent = emergency.status === "pending";
+  const locationText =
+    emergency.address ??
+    (emergency.latitude !== null && emergency.longitude !== null
+      ? `${emergency.latitude.toFixed(4)}, ${emergency.longitude.toFixed(4)}`
+      : "Lokasi belum tersedia");
+  const sensorDetected = emergency.sensor_detected || emergency.fall_detected;
+
   return (
     <Pressable
       onPress={onPress}
@@ -77,23 +94,21 @@ export const EmergencyCard: React.FC<Props> = ({ emergency, onPress }) => {
       </Text>
 
       <Text style={styles.address} numberOfLines={2}>
-        📍 {emergency.address ?? `${emergency.latitude.toFixed(4)}, ${emergency.longitude.toFixed(4)}`}
+        Lokasi: {locationText}
       </Text>
 
       <View style={styles.footer}>
         <Text style={styles.time}>
           {formatRelativeTime(emergency.created_at)}
         </Text>
-        {emergency.fall_detected && (
+        {sensorDetected && (
           <View style={styles.tag}>
-            <Text style={styles.tagText}>JATUH TERDETEKSI</Text>
+            <Text style={styles.tagText}>SENSOR DARURAT</Text>
           </View>
         )}
         {emergency.photo_url && (
           <View style={[styles.tag, { backgroundColor: colors.secondaryLight }]}>
-            <Text style={[styles.tagText, { color: colors.secondary }]}>
-              📷 FOTO
-            </Text>
+            <Text style={[styles.tagText, { color: colors.secondary }]}>FOTO</Text>
           </View>
         )}
       </View>

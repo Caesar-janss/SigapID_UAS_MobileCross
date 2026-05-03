@@ -1,33 +1,61 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, typography } from "@/theme";
 import { EmergencyType } from "@/types";
 
+type ServiceType = Exclude<EmergencyType, "sos">;
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+
 interface ServiceButtonProps {
-  type: Exclude<EmergencyType, "sos">;
+  type: ServiceType;
   onPress: () => void;
   disabled?: boolean;
 }
 
 const config: Record<
-  Exclude<EmergencyType, "sos">,
-  { label: string; emoji: string; color: string; description: string }
+  ServiceType,
+  { label: string; icon: IconName; color: string; description: string }
 > = {
+  fire: {
+    label: "Kebakaran",
+    icon: "fire",
+    color: colors.firefighter,
+    description: "Api, asap, ledakan",
+  },
+  medical: {
+    label: "Medis",
+    icon: "medical-bag",
+    color: colors.ambulance,
+    description: "Kesehatan darurat",
+  },
+  crime: {
+    label: "Kriminal",
+    icon: "shield-alert-outline",
+    color: colors.police,
+    description: "Ancaman, kekerasan",
+  },
+  disaster: {
+    label: "Bencana",
+    icon: "weather-lightning",
+    color: colors.warning,
+    description: "Gempa, banjir, longsor",
+  },
   police: {
     label: "Polisi",
-    emoji: "🚓",
+    icon: "police-badge-outline",
     color: colors.police,
     description: "Kejahatan, gangguan",
   },
   ambulance: {
     label: "Ambulans",
-    emoji: "🚑",
+    icon: "ambulance",
     color: colors.ambulance,
     description: "Medis darurat",
   },
   firefighter: {
     label: "Pemadam",
-    emoji: "🚒",
+    icon: "fire-truck",
     color: colors.firefighter,
     description: "Kebakaran",
   },
@@ -50,8 +78,8 @@ export const ServiceButton: React.FC<ServiceButtonProps> = ({
         disabled && { opacity: 0.5 },
       ]}
     >
-      <View style={[styles.iconBubble, { backgroundColor: c.color + "1A" }]}>
-        <Text style={styles.emoji}>{c.emoji}</Text>
+      <View style={[styles.iconBubble, { backgroundColor: `${c.color}1A` }]}>
+        <MaterialCommunityIcons name={c.icon} size={28} color={c.color} />
       </View>
       <Text style={[typography.bodyStrong, { color: colors.text }]}>
         {c.label}
@@ -81,7 +109,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: spacing.sm,
   },
-  emoji: { fontSize: 28 },
   desc: {
     color: colors.textSubtle,
     marginTop: 2,

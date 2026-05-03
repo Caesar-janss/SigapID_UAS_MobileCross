@@ -1,87 +1,135 @@
+import { Href } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { Button } from "@/components/ui/Button";
-import { useAuth } from "@/hooks/useAuth";
 import { colors, spacing, typography } from "@/theme";
+import {
+  Card,
+  IconButton,
+  MiniMap,
+  PrimaryAction,
+  ScreenShell,
+  StatusPill,
+  navigateTo,
+} from "@/components/app/MockAppUI";
+
+const incomingReports = [
+  {
+    title: "Medis - Prioritas Tinggi",
+    reporter: "Alya Permata",
+    time: "09:41 WIB",
+    status: "Baru",
+    tone: "danger",
+  },
+  {
+    title: "Kebakaran - Area Pemukiman",
+    reporter: "Rima Nugra",
+    time: "09:36 WIB",
+    status: "Proses",
+    tone: "warning",
+  },
+  {
+    title: "Kriminal - Jalan Sepi",
+    reporter: "Nanda Kirana",
+    time: "09:30 WIB",
+    status: "Ditangani",
+    tone: "success",
+  },
+] as const;
 
 export default function OperatorDashboard() {
-  const { profile, signOut } = useAuth();
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace("/auth/LoginScreen");
-    } catch (e) {
-      Alert.alert(
-        "Gagal keluar",
-        e instanceof Error ? e.message : "Terjadi kesalahan",
-      );
-    }
-  };
-
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <View style={styles.container}>
-        <View>
-          <Text style={[typography.caption, styles.eyebrow]}>
-            Dashboard Operator
-          </Text>
-          <Text style={[typography.h1, styles.title]}>
-            Halo, {profile?.full_name ?? "Operator"}
-          </Text>
-          <Text style={[typography.body, styles.subtitle]}>
-            Halaman ini untuk pengguna yang menerima dan menangani laporan.
-          </Text>
-        </View>
+    <ScreenShell
+      role="operator"
+      activeTab="home"
+      eyebrow="Dispatcher - Home"
+      title="Laporan Masuk"
+      subtitle="Prioritas laporan disusun untuk operator yang paling siap."
+      action={<IconButton icon="bell-outline" tone="secondary" />}
+    >
+      <View style={styles.list}>
+        {incomingReports.map((report) => (
+          <Card key={report.title} style={styles.reportCard}>
+            <View style={styles.reportHeader}>
+              <View style={styles.reportText}>
+                <Text style={styles.reportTitle}>{report.title}</Text>
+                <Text style={styles.reportMeta}>
+                  Pelapor: {report.reporter} - {report.time}
+                </Text>
+              </View>
+              <StatusPill
+                label={report.status}
+                tone={
+                  report.tone === "danger"
+                    ? "danger"
+                    : report.tone === "warning"
+                      ? "warning"
+                      : "success"
+                }
+              />
+            </View>
 
-        <View style={styles.panel}>
-          <Text style={[typography.h3, styles.panelTitle]}>
-            Aksi utama operator
-          </Text>
-          <Text style={[typography.body, styles.panelText]}>
-            Nanti daftar laporan masuk, detail laporan, dan panggilan bantuan
-            bisa masuk di folder operator ini.
-          </Text>
-        </View>
+            <MiniMap height={92} />
 
-        <Button label="Keluar" variant="ghost" onPress={handleSignOut} />
+            <View style={styles.actions}>
+              <PrimaryAction
+                label="Call"
+                icon="phone"
+                tone="soft"
+                style={styles.action}
+                onPress={() => Alert.alert("Call", "Simulasi panggilan pelapor.")}
+              />
+              <PrimaryAction
+                label="Chat"
+                icon="message-outline"
+                tone="soft"
+                style={styles.action}
+                onPress={() => navigateTo("/operator/chat" as Href)}
+              />
+              <PrimaryAction
+                label="Detail"
+                icon="file-search-outline"
+                tone="secondary"
+                style={styles.action}
+                onPress={() => navigateTo("/operator/report-detail" as Href)}
+              />
+            </View>
+          </Card>
+        ))}
       </View>
-    </SafeAreaView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  container: {
+  list: {
+    gap: spacing.md,
+  },
+  reportCard: {
+    gap: spacing.md,
+  },
+  reportHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  reportText: {
     flex: 1,
-    padding: spacing.xl,
-    gap: spacing.xl,
   },
-  eyebrow: {
-    color: colors.secondary,
-    textTransform: "uppercase",
-  },
-  title: {
+  reportTitle: {
+    ...typography.bodyStrong,
     color: colors.text,
-    marginTop: spacing.xs,
   },
-  subtitle: {
+  reportMeta: {
+    fontSize: 11,
     color: colors.textMuted,
-    marginTop: spacing.sm,
+    marginTop: 3,
   },
-  panel: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: spacing.lg,
+  actions: {
+    flexDirection: "row",
     gap: spacing.sm,
   },
-  panelTitle: {
-    color: colors.text,
-  },
-  panelText: {
-    color: colors.textMuted,
+  action: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: spacing.sm,
   },
 });

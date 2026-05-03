@@ -51,6 +51,14 @@ function getReadableAuthError(error: { message?: string; status?: number }) {
     return "Email ini sudah terdaftar. Coba login atau pakai email lain.";
   }
 
+  if (lowerMessage.includes("invalid login credentials")) {
+    return "Email atau password salah. Kalau akun baru dibuat, pastikan emailnya benar, password sama, dan Confirm email di Supabase sedang dimatikan untuk testing.";
+  }
+
+  if (lowerMessage.includes("email not confirmed")) {
+    return "Email belum dikonfirmasi. Untuk testing, matikan Confirm email di Supabase atau klik link verifikasi di email.";
+  }
+
   if (lowerMessage.includes("email")) {
     return message;
   }
@@ -70,8 +78,12 @@ function getReadableDatabaseError(error: { message?: string }) {
   const message = error.message ?? "Terjadi kesalahan database.";
   const lowerMessage = message.toLowerCase();
 
+  if (lowerMessage.includes("schema cache")) {
+    return `${message}. Tabelnya mungkin sudah ada, tapi cache API Supabase belum refresh. Jalankan "notify pgrst, 'reload schema';" di SQL Editor lalu restart Expo.`;
+  }
+
   if (lowerMessage.includes("relation") && lowerMessage.includes("profiles")) {
-    return "Tabel profiles belum ada di Supabase. Jalankan SQL di supabase/profiles.sql lewat Supabase SQL Editor.";
+    return `${message}. Cek apakah tabel public.profiles benar-benar ada di project Supabase yang sama dengan EXPO_PUBLIC_SUPABASE_URL.`;
   }
 
   if (lowerMessage.includes("row-level security")) {
@@ -264,22 +276,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      if (data.session) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: data.user.id,
-            email,
-            full_name: fullName,
-            role,
-            phone: "",
-            avatar_url: "",
-          });
-
-        if (profileError) {
-          setState((current) => ({ ...current, loading: false }));
-          throw new Error(getReadableDatabaseError(profileError));
-        }
+      if (data.user.identities?.length === 0) {
+        setState((current) => ({ ...current, loading: false }));
+        throw new Error(
+          "Email ini sudah pernah terdaftar. Supabase tidak membuat akun baru, jadi login harus pakai password akun lama atau pakai email lain.",
+        );
       }
 
       setState((current) => ({
