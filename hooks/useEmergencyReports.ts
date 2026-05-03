@@ -21,6 +21,7 @@ const activeStatuses: EmergencyStatus[] = [
 ];
 
 const chatPollingMs = 1500;
+const historyLimit = 15;
 
 type ReportInsert = {
   type: EmergencyType;
@@ -172,7 +173,10 @@ export function useReporterReports() {
   );
 
   const history = useMemo(
-    () => reports.filter((report) => !isActiveStatus(report.status)),
+    () =>
+      reports
+        .filter((report) => !isActiveStatus(report.status))
+        .slice(0, historyLimit),
     [reports],
   );
 
@@ -251,7 +255,7 @@ export function useOperatorReports() {
         (report) =>
           !isActiveStatus(report.status) &&
           report.assigned_operator_id === profile?.id,
-      ),
+      ).slice(0, historyLimit),
     [profile?.id, reports],
   );
 

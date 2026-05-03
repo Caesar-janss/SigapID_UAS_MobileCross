@@ -17,7 +17,7 @@ export default function OperatorHistory() {
       role="operator"
       activeTab="history"
       title="Laporan Selesai"
-      subtitle="Riwayat insiden yang sudah diselesaikan operator."
+      subtitle="15 riwayat terbaru yang sudah diselesaikan operator."
       action={<IconButton icon="bell-outline" tone="secondary" />}
     >
       <View style={styles.list}>

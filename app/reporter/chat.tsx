@@ -194,11 +194,6 @@ export default function ReporterChat() {
           </View>
 
           <View style={styles.inputBar}>
-            <MaterialCommunityIcons
-              name="emoticon-outline"
-              size={20}
-              color={colors.textMuted}
-            />
             <TextInput
               style={styles.input}
               placeholder="Tulis pesan..."
@@ -206,11 +201,6 @@ export default function ReporterChat() {
               value={draft}
               onChangeText={setDraft}
               editable={!sending && !!reportId}
-            />
-            <MaterialCommunityIcons
-              name="paperclip"
-              size={20}
-              color={colors.text}
             />
             <MaterialCommunityIcons
               name="send"

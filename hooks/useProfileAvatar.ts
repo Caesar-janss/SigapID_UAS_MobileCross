@@ -1,20 +1,22 @@
 import { useCallback, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/utils/supabase";
 
 type AvatarSource = "camera" | "library";
+const avatarSize = 768;
+const avatarQuality = 0.72;
 
-function extensionFromAsset(asset: ImagePicker.ImagePickerAsset) {
-  const filenameExtension = asset.fileName?.split(".").pop()?.toLowerCase();
-
-  if (filenameExtension) {
-    return filenameExtension === "jpeg" ? "jpg" : filenameExtension;
-  }
-
-  if (asset.mimeType === "image/png") return "png";
-  if (asset.mimeType === "image/webp") return "webp";
-  return "jpg";
+async function compressAvatar(uri: string) {
+  return ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: avatarSize, height: avatarSize } }],
+    {
+      compress: avatarQuality,
+      format: ImageManipulator.SaveFormat.JPEG,
+    },
+  );
 }
 
 export function useProfileAvatar() {
@@ -63,20 +65,31 @@ export function useProfileAvatar() {
 
       try {
         const asset = result.assets[0];
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const extension = extensionFromAsset(asset);
-        const contentType = asset.mimeType ?? `image/${extension === "jpg" ? "jpeg" : extension}`;
-        const storagePath = `${profile.id}/avatar.${extension}`;
+        const compressed = await compressAvatar(asset.uri);
+        const response = await fetch(compressed.uri);
+        const fileBody = await response.arrayBuffer();
+        const storagePath = `${profile.id}/avatar.jpg`;
 
         const { error: uploadError } = await supabase.storage
           .from("profile-avatars")
-          .upload(storagePath, blob, {
-            contentType,
+          .upload(storagePath, fileBody, {
+            contentType: "image/jpeg",
             upsert: true,
           });
 
         if (uploadError) {
+          const message = uploadError.message.toLowerCase();
+
+          if (
+            message.includes("bucket") ||
+            message.includes("row-level security") ||
+            message.includes("permission")
+          ) {
+            throw new Error(
+              "Storage avatar belum siap. Jalankan ulang supabase/profiles.sql di Supabase SQL Editor.",
+            );
+          }
+
           throw new Error(uploadError.message);
         }
 

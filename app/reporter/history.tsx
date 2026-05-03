@@ -17,7 +17,7 @@ export default function ReporterHistory() {
       role="reporter"
       activeTab="history"
       title="Laporan Selesai"
-      subtitle="Riwayat laporan yang sudah ditangani."
+      subtitle="15 riwayat terbaru yang sudah ditangani."
       action={<IconButton icon="bell-outline" tone="secondary" />}
     >
       <View style={styles.list}>
