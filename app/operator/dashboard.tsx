@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useOperatorReports } from "@/hooks/useEmergencyReports";
 import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
+import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -71,7 +72,11 @@ export default function OperatorDashboard() {
               />
             </View>
 
-            <MiniMap height={92} />
+            <MiniMap
+              height={92}
+              latitude={report.latitude}
+              longitude={report.longitude}
+            />
 
             <View style={styles.actions}>
               <PrimaryAction
@@ -79,12 +84,7 @@ export default function OperatorDashboard() {
                 icon="phone"
                 tone="soft"
                 style={styles.action}
-                onPress={() =>
-                  Alert.alert(
-                    "Call",
-                    `Ruang panggilan: ${report.call_room ?? "belum tersedia"}.`,
-                  )
-                }
+                onPress={() => showApkOnlyFeature("Panggilan")}
               />
               <PrimaryAction
                 label="Chat"

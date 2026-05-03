@@ -41,6 +41,12 @@
       ],
       "expo-web-browser",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SigapID perlu akses lokasi untuk mengirim dan melacak laporan darurat."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "SigapID perlu akses galeri untuk memilih foto profil.",

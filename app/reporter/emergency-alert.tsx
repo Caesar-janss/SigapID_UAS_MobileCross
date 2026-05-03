@@ -1,4 +1,5 @@
 import { Href, router } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEmergencyActions } from "@/hooks/useEmergencyReports";
@@ -12,8 +13,13 @@ import {
 
 export default function ReporterEmergencyAlert() {
   const { createReport } = useEmergencyActions();
+  const [countdown, setCountdown] = useState(10);
+  const sendingRef = useRef(false);
 
-  const handleSensorReport = async () => {
+  const handleSensorReport = useCallback(async () => {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+
     try {
       const report = await createReport({
         type: "medical",
@@ -32,8 +38,24 @@ export default function ReporterEmergencyAlert() {
         "Gagal mengirim bantuan",
         error instanceof Error ? error.message : "Terjadi kesalahan.",
       );
+      sendingRef.current = false;
     }
-  };
+  }, [createReport]);
+
+  useEffect(() => {
+    if (countdown <= 0) {
+      handleSensorReport();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [countdown, handleSensorReport]);
 
   return (
     <ScreenShell
@@ -60,7 +82,7 @@ export default function ReporterEmergencyAlert() {
           Kami mendeteksi guncangan keras. Jika tidak ada respons, sistem akan
           mengirim laporan medis otomatis.
         </Text>
-        <Text style={styles.countdown}>10</Text>
+        <Text style={styles.countdown}>{countdown}</Text>
 
         <PrimaryAction
           label="Ya, kirim bantuan sekarang"

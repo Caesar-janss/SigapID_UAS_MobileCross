@@ -1,6 +1,9 @@
 import { Stack } from "expo-router";
+import { useShakeEmergencyAlert } from "@/hooks/useShakeEmergencyAlert";
 
 export default function ReporterLayout() {
+  useShakeEmergencyAlert();
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="dashboard" />

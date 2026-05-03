@@ -20,12 +20,12 @@ import {
 } from "@/hooks/useEmergencyReports";
 import { useAuth } from "@/hooks/useAuth";
 import { emergencyStatusLabel } from "@/utils/format";
+import { isExpoGo, showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
   ChatBubble,
   IconButton,
-  PrimaryAction,
   ScreenShell,
 } from "@/components/app/MockAppUI";
 
@@ -72,6 +72,11 @@ export default function OperatorChat() {
   };
 
   const handleVoice = async () => {
+    if (isExpoGo()) {
+      showApkOnlyFeature("Voice chat");
+      return;
+    }
+
     try {
       await sendMessage("Operator mengirim pesan suara.", "voice", {
         voiceDurationSeconds: 12,
@@ -108,11 +113,19 @@ export default function OperatorChat() {
           : "Pilih laporan aktif untuk mulai chat"
       }
       action={
-        <IconButton
-          icon="phone"
-          tone="secondary"
-          onPress={() => Alert.alert("Call", "Fitur panggilan sedang disiapkan.")}
-        />
+        <View style={styles.headerActions}>
+          <IconButton icon="microphone" tone="secondary" onPress={handleVoice} />
+          <IconButton
+            icon="phone"
+            tone="secondary"
+            onPress={() => showApkOnlyFeature("Panggilan")}
+          />
+          <IconButton
+            icon="check-circle-outline"
+            tone="danger"
+            onPress={handleFinish}
+          />
+        </View>
       }
       scroll={false}
     >
@@ -169,30 +182,6 @@ export default function OperatorChat() {
         </ScrollView>
 
         <View style={styles.composer}>
-          <View style={styles.quickActions}>
-            <PrimaryAction
-              label="Voice"
-              icon="microphone"
-              tone="soft"
-              style={styles.quickButton}
-              onPress={handleVoice}
-            />
-            <PrimaryAction
-              label="Call"
-              icon="phone"
-              tone="secondary"
-              style={styles.quickButton}
-              onPress={() => Alert.alert("Call", "Fitur panggilan sedang disiapkan.")}
-            />
-            <PrimaryAction
-              label="Selesai"
-              icon="check-circle-outline"
-              tone="danger"
-              style={styles.quickButton}
-              onPress={handleFinish}
-            />
-          </View>
-
           <View style={styles.inputBar}>
             <TextInput
               style={styles.input}
@@ -268,12 +257,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
   },
-  quickActions: {
+  headerActions: {
     flexDirection: "row",
-    gap: spacing.sm,
-  },
-  quickButton: {
-    flex: 1,
+    gap: spacing.xs,
   },
   composer: {
     gap: spacing.sm,

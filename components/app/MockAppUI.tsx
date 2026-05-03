@@ -2,6 +2,7 @@ import React from "react";
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleProp,
@@ -14,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Href, router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import MapView, { Marker } from "react-native-maps";
 import { colors, radius, shadow, spacing, typography } from "@/theme";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -341,7 +343,66 @@ export function Avatar({
   );
 }
 
-export function MiniMap({ height = 132 }: { height?: number }) {
+export function MiniMap({
+  height = 132,
+  latitude,
+  longitude,
+  operatorLatitude,
+  operatorLongitude,
+}: {
+  height?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  operatorLatitude?: number | null;
+  operatorLongitude?: number | null;
+}) {
+  const hasLocation =
+    typeof latitude === "number" && typeof longitude === "number";
+  const hasOperatorLocation =
+    typeof operatorLatitude === "number" && typeof operatorLongitude === "number";
+
+  if (hasLocation && Platform.OS !== "web") {
+    return (
+      <View style={[styles.map, { height }]}>
+        <MapView
+          style={styles.liveMap}
+          initialRegion={{
+            latitude,
+            longitude,
+            latitudeDelta: 0.012,
+            longitudeDelta: 0.012,
+          }}
+          region={{
+            latitude,
+            longitude,
+            latitudeDelta: 0.012,
+            longitudeDelta: 0.012,
+          }}
+          scrollEnabled={height > 150}
+          zoomEnabled={height > 150}
+          pitchEnabled={false}
+          rotateEnabled={false}
+        >
+          <Marker
+            coordinate={{ latitude, longitude }}
+            title="Lokasi pelapor"
+            pinColor={colors.danger}
+          />
+          {hasOperatorLocation && (
+            <Marker
+              coordinate={{
+                latitude: operatorLatitude,
+                longitude: operatorLongitude,
+              }}
+              title="Operator"
+              pinColor={colors.success}
+            />
+          )}
+        </MapView>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.map, { height }]}>
       <View style={[styles.road, styles.roadA]} />
@@ -585,6 +646,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: radius.lg,
     backgroundColor: "#EAF8F6",
+  },
+  liveMap: {
+    flex: 1,
   },
   road: {
     position: "absolute",

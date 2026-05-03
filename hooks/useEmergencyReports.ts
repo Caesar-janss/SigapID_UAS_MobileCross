@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState } from "react-native";
+import * as Location from "expo-location";
 import {
   EmergencyPriority,
   EmergencyReport,
@@ -37,6 +38,24 @@ type ReportUpdate = Partial<
     "status" | "accepted_at" | "dispatched_at" | "arrived_at" | "resolved_at"
   >
 >;
+
+async function getCurrentLocation() {
+  const permission = await Location.requestForegroundPermissionsAsync();
+
+  if (!permission.granted) {
+    return null;
+  }
+
+  const position = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Balanced,
+  });
+
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+  };
+}
 
 function reportSelect() {
   return `
@@ -489,6 +508,7 @@ export function useEmergencyActions() {
       }
 
       const callRoom = `sigapid-${Date.now()}-${profile.id.slice(0, 8)}`;
+      const location = await getCurrentLocation();
 
       const { data, error: insertError } = await supabase
         .from("emergency_reports")
@@ -503,6 +523,10 @@ export function useEmergencyActions() {
           call_room: callRoom,
           sensor_detected: sensorDetected,
           auto_dispatch_at: sensorDetected ? new Date().toISOString() : null,
+          latitude: location?.latitude ?? null,
+          longitude: location?.longitude ?? null,
+          accuracy: location?.accuracy ?? null,
+          address: profile.address ?? null,
         })
         .select("*")
         .single();
@@ -523,13 +547,34 @@ export function useEmergencyActions() {
 
       return report;
     },
-    [profile?.id],
+    [profile?.address, profile?.id],
   );
 
   const updateReport = useCallback(async (reportId: string, update: ReportUpdate) => {
     const { error } = await supabase
       .from("emergency_reports")
       .update(update)
+      .eq("id", reportId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }, []);
+
+  const updateReportLocation = useCallback(async (reportId: string) => {
+    const location = await getCurrentLocation();
+
+    if (!location) {
+      throw new Error("Izin lokasi belum diberikan.");
+    }
+
+    const { error } = await supabase
+      .from("emergency_reports")
+      .update({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy,
+      })
       .eq("id", reportId);
 
     if (error) {
@@ -567,5 +612,11 @@ export function useEmergencyActions() {
     [updateReport],
   );
 
-  return { createReport, acceptReport, finishReport, updateReport };
+  return {
+    createReport,
+    acceptReport,
+    finishReport,
+    updateReport,
+    updateReportLocation,
+  };
 }

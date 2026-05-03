@@ -6,6 +6,7 @@ import {
   useReporterReports,
 } from "@/hooks/useEmergencyReports";
 import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
+import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -22,8 +23,8 @@ export default function ReporterTracking() {
   const params = useLocalSearchParams<{ reportId?: string }>();
   const { activeReport, loading: activeLoading } = useReporterReports();
   const targetReportId = params.reportId ?? activeReport?.id;
-  const { report, loading, error } = useEmergencyReport(targetReportId);
-  const { finishReport } = useEmergencyActions();
+  const { report, loading, error, reload } = useEmergencyReport(targetReportId);
+  const { finishReport, updateReportLocation } = useEmergencyActions();
   const active = report ?? activeReport;
 
   const handleFinish = async () => {
@@ -54,10 +55,22 @@ export default function ReporterTracking() {
 
   const openCall = async () => {
     if (!active?.id) return;
-    Alert.alert(
-      "Panggilan",
-      `Ruang panggilan: ${active.call_room ?? "belum tersedia"}. Integrasi audio realtime bisa memakai WebRTC/Twilio nanti.`,
-    );
+    showApkOnlyFeature("Panggilan");
+  };
+
+  const refreshLocation = async () => {
+    if (!active?.id) return;
+
+    try {
+      await updateReportLocation(active.id);
+      await reload();
+      Alert.alert("Lokasi diperbarui", "Koordinat laporan sudah diperbarui.");
+    } catch (locationError) {
+      Alert.alert(
+        "Gagal memperbarui lokasi",
+        locationError instanceof Error ? locationError.message : "Terjadi kesalahan.",
+      );
+    }
   };
 
   if (loading || activeLoading) {
@@ -108,12 +121,16 @@ export default function ReporterTracking() {
         <IconButton
           icon="crosshairs-gps"
           tone="secondary"
-          onPress={() => Alert.alert("Lokasi diperbarui")}
+          onPress={refreshLocation}
         />
       }
     >
       <Card style={styles.trackingCard}>
-        <MiniMap height={260} />
+        <MiniMap
+          height={260}
+          latitude={active.latitude}
+          longitude={active.longitude}
+        />
         <View style={styles.trackingBody}>
           <View style={styles.statusRow}>
             <View style={styles.statusText}>
@@ -134,6 +151,14 @@ export default function ReporterTracking() {
             items={[
               { label: "Prioritas", value: active.priority },
               { label: "Operator", value: active.assigned_operator?.full_name ?? "Mencari" },
+              {
+                label: "Lokasi",
+                value:
+                  typeof active.latitude === "number" &&
+                  typeof active.longitude === "number"
+                    ? `${active.latitude.toFixed(4)}, ${active.longitude.toFixed(4)}`
+                    : "Belum ada",
+              },
             ]}
           />
 

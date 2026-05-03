@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useEmergencyReport } from "@/hooks/useEmergencyReports";
 import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
+import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -92,7 +93,11 @@ export default function OperatorReportDetail() {
         />
       }
     >
-      <MiniMap height={200} />
+      <MiniMap
+        height={200}
+        latitude={report.latitude}
+        longitude={report.longitude}
+      />
 
       <InfoGrid
         items={[
@@ -100,6 +105,14 @@ export default function OperatorReportDetail() {
           { label: "Prioritas", value: report.priority },
           { label: "Status", value: emergencyStatusLabel(report.status) },
           { label: "Masuk", value: formatRelativeTime(report.created_at) },
+          {
+            label: "Koordinat",
+            value:
+              typeof report.latitude === "number" &&
+              typeof report.longitude === "number"
+                ? `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`
+                : "Belum ada",
+          },
         ]}
       />
 
@@ -134,7 +147,7 @@ export default function OperatorReportDetail() {
           icon="phone"
           tone="soft"
           style={styles.quickButton}
-          onPress={() => Alert.alert("Call", `Ruang panggilan: ${report.call_room ?? "-"}`)}
+          onPress={() => showApkOnlyFeature("Panggilan")}
         />
         <PrimaryAction
           label="Message"
