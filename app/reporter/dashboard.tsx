@@ -5,6 +5,7 @@ import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useEmergencyActions } from "@/hooks/useEmergencyReports";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { EmergencyType, FamilyMemberWithProfile } from "@/types";
 import { colors, radius, spacing, typography } from "@/theme";
 import {
@@ -54,6 +55,7 @@ const emergencyTypes = [
 
 export default function ReporterDashboard() {
   const { profile } = useAuth();
+  const { palette, mode } = useAppTheme();
   const { members, loading: familyLoading, error: familyError } = useFamilyMembers();
   const { createReport } = useEmergencyActions();
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -101,8 +103,10 @@ export default function ReporterDashboard() {
       <Card style={styles.familyCard}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Monitoring Keluarga</Text>
-            <Text style={styles.sectionCaption}>
+            <Text style={[styles.sectionTitle, { color: palette.text }]}>
+              Monitoring Keluarga
+            </Text>
+            <Text style={[styles.sectionCaption, { color: palette.muted }]}>
               {familyLoading
                 ? "Memuat anggota keluarga..."
                 : pendingIncomingCount > 0
@@ -113,28 +117,44 @@ export default function ReporterDashboard() {
           <View style={styles.headerActions}>
             <Pressable
               onPress={() => navigateTo("/reporter/family-detail" as Href)}
-              style={styles.smallButton}
+              style={[
+                styles.smallButton,
+                { backgroundColor: palette.cardSoft, borderColor: palette.border },
+              ]}
             >
-              <Text style={styles.smallButtonText}>Detail</Text>
+              <Text style={[styles.smallButtonText, { color: palette.secondary }]}>
+                Detail
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => navigateTo("/reporter/add-family" as Href)}
-              style={styles.smallButton}
+              style={[
+                styles.smallButton,
+                { backgroundColor: palette.cardSoft, borderColor: palette.border },
+              ]}
             >
-              <Text style={styles.smallButtonText}>Tambah</Text>
+              <Text style={[styles.smallButtonText, { color: palette.secondary }]}>
+                Tambah
+              </Text>
             </Pressable>
           </View>
         </View>
 
         {familyError ? (
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: palette.muted }]}>
             Data keluarga belum bisa dimuat: {familyError}
           </Text>
         ) : visibleMembers.length > 0 ? (
           <View style={styles.familyGrid}>
             {visibleMembers.map((member) => (
-              <View key={member.id} style={styles.familyStatus}>
-                <Text style={styles.familyName}>
+              <View
+                key={member.id}
+                style={[
+                  styles.familyStatus,
+                  { backgroundColor: palette.cardSoft, borderColor: palette.border },
+                ]}
+              >
+                <Text style={[styles.familyName, { color: palette.text }]}>
                   {getDisplayProfile(member, profile?.id)?.full_name ??
                     "Anggota keluarga"}
                 </Text>
@@ -158,14 +178,21 @@ export default function ReporterDashboard() {
             ))}
           </View>
         ) : (
-          <View style={styles.emptyFamily}>
+          <View
+            style={[
+              styles.emptyFamily,
+              { backgroundColor: palette.cardSoft, borderColor: palette.border },
+            ]}
+          >
             <MaterialCommunityIcons
               name="account-plus-outline"
               size={26}
               color={colors.primary}
             />
-            <Text style={styles.emptyTitle}>Belum ada keluarga</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: palette.text }]}>
+              Belum ada keluarga
+            </Text>
+            <Text style={[styles.emptyText, { color: palette.muted }]}>
               Tambahkan keluarga pakai ID akun supaya status mereka muncul di
               sini.
             </Text>
@@ -176,8 +203,10 @@ export default function ReporterDashboard() {
       <Card style={styles.reportCard}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Tombol Darurat</Text>
-            <Text style={styles.sectionCaption}>
+            <Text style={[styles.sectionTitle, { color: palette.text }]}>
+              Tombol Darurat
+            </Text>
+            <Text style={[styles.sectionCaption, { color: palette.muted }]}>
               Pilih jenis insiden untuk respons lebih cepat.
             </Text>
           </View>
@@ -208,7 +237,10 @@ export default function ReporterDashboard() {
               }
               style={({ pressed }) => [
                 styles.emergencyTile,
-                { backgroundColor: item.background, borderColor: `${item.color}35` },
+                {
+                  backgroundColor: mode === "dark" ? palette.cardSoft : item.background,
+                  borderColor: `${item.color}55`,
+                },
                 pressed && styles.pressed,
               ]}
             >
@@ -220,7 +252,9 @@ export default function ReporterDashboard() {
               <Text style={[styles.emergencyTitle, { color: item.color }]}>
                 {item.title}
               </Text>
-              <Text style={styles.emergencyText}>{item.description}</Text>
+              <Text style={[styles.emergencyText, { color: palette.muted }]}>
+                {item.description}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -233,9 +267,16 @@ export default function ReporterDashboard() {
         onRequestClose={() => setCategoryPickerOpen(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.categorySheet}>
-            <Text style={styles.modalTitle}>Pilih kategori laporan</Text>
-            <Text style={styles.modalCaption}>
+          <View
+            style={[
+              styles.categorySheet,
+              { backgroundColor: palette.card, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: palette.text }]}>
+              Pilih kategori laporan
+            </Text>
+            <Text style={[styles.modalCaption, { color: palette.muted }]}>
               Operator akan dipilih otomatis sesuai laporan yang dikirim.
             </Text>
 
@@ -252,7 +293,10 @@ export default function ReporterDashboard() {
                   }
                   style={({ pressed }) => [
                     styles.categoryChoice,
-                    { borderColor: `${item.color}35` },
+                    {
+                      backgroundColor: palette.cardSoft,
+                      borderColor: `${item.color}55`,
+                    },
                     pressed && styles.pressed,
                   ]}
                 >
@@ -262,8 +306,12 @@ export default function ReporterDashboard() {
                     color={item.color}
                   />
                   <View style={styles.categoryText}>
-                    <Text style={styles.categoryTitle}>{item.title}</Text>
-                    <Text style={styles.categoryCaption}>{item.description}</Text>
+                    <Text style={[styles.categoryTitle, { color: palette.text }]}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.categoryCaption, { color: palette.muted }]}>
+                      {item.description}
+                    </Text>
                   </View>
                 </Pressable>
               ))}
@@ -279,6 +327,10 @@ export default function ReporterDashboard() {
                 style={({ pressed }) => [
                   styles.categoryChoice,
                   styles.sosChoice,
+                  {
+                    backgroundColor: mode === "dark" ? palette.cardSoft : "#FFF7F7",
+                    borderColor: "#FECACA",
+                  },
                   pressed && styles.pressed,
                 ]}
               >
@@ -288,8 +340,10 @@ export default function ReporterDashboard() {
                   color={colors.danger}
                 />
                 <View style={styles.categoryText}>
-                  <Text style={styles.categoryTitle}>SOS</Text>
-                  <Text style={styles.categoryCaption}>
+                  <Text style={[styles.categoryTitle, { color: palette.text }]}>
+                    SOS
+                  </Text>
+                  <Text style={[styles.categoryCaption, { color: palette.muted }]}>
                     Untuk kondisi darurat yang belum bisa dijelaskan.
                   </Text>
                 </View>

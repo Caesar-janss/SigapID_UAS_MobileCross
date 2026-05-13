@@ -5,6 +5,7 @@ import {
   useEmergencyReport,
   useReporterReports,
 } from "@/hooks/useEmergencyReports";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
 import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
@@ -20,6 +21,7 @@ import {
 } from "@/components/app/MockAppUI";
 
 export default function ReporterTracking() {
+  const { palette, mode } = useAppTheme();
   const params = useLocalSearchParams<{ reportId?: string }>();
   const { activeReport, loading: activeLoading } = useReporterReports();
   const targetReportId = params.reportId ?? activeReport?.id;
@@ -82,7 +84,9 @@ export default function ReporterTracking() {
         subtitle="Mengambil laporan aktif dari backend."
       >
         <Card>
-          <Text style={styles.mockNote}>Sebentar, data laporan sedang dimuat.</Text>
+          <Text style={[styles.mockNote, { color: palette.muted }]}>
+            Sebentar, data laporan sedang dimuat.
+          </Text>
         </Card>
       </ScreenShell>
     );
@@ -96,8 +100,16 @@ export default function ReporterTracking() {
         title="Belum Ada Laporan Aktif"
         subtitle="Buat laporan darurat dari halaman home."
       >
-        <Card style={styles.sensorCard}>
-          <Text style={styles.sectionCaption}>
+        <Card
+          style={[
+            styles.sensorCard,
+            {
+              backgroundColor: mode === "dark" ? palette.cardSoft : "#FFF7F7",
+              borderColor: "#FECACA",
+            },
+          ]}
+        >
+          <Text style={[styles.sectionCaption, { color: palette.muted }]}>
             {error ?? "Tidak ada laporan aktif yang perlu dilacak."}
           </Text>
           <PrimaryAction
@@ -134,8 +146,10 @@ export default function ReporterTracking() {
         <View style={styles.trackingBody}>
           <View style={styles.statusRow}>
             <View style={styles.statusText}>
-              <Text style={styles.sectionTitle}>Bantuan sedang menuju</Text>
-              <Text style={styles.sectionCaption}>
+              <Text style={[styles.sectionTitle, { color: palette.text }]}>
+                Bantuan sedang menuju
+              </Text>
+              <Text style={[styles.sectionCaption, { color: palette.muted }]}>
                 {active.assigned_operator?.full_name
                   ? `Terhubung dengan ${active.assigned_operator.full_name}.`
                   : "Sistem sedang mencari operator yang tersedia."}
@@ -162,7 +176,7 @@ export default function ReporterTracking() {
             ]}
           />
 
-          <Text style={styles.mockNote}>
+          <Text style={[styles.mockNote, { color: palette.muted }]}>
             {active.description ?? active.title ?? "Tetap berada di lokasi aman dan aktifkan notifikasi."}
           </Text>
         </View>
@@ -192,11 +206,21 @@ export default function ReporterTracking() {
         </View>
       </Card>
 
-      <Card style={styles.sensorCard}>
+      <Card
+        style={[
+          styles.sensorCard,
+          {
+            backgroundColor: mode === "dark" ? palette.cardSoft : "#FFF7F7",
+            borderColor: "#FECACA",
+          },
+        ]}
+      >
         <View style={styles.statusRow}>
           <View style={styles.statusText}>
-            <Text style={styles.sectionTitle}>Deteksi guncangan</Text>
-            <Text style={styles.sectionCaption}>
+            <Text style={[styles.sectionTitle, { color: palette.text }]}>
+              Deteksi guncangan
+            </Text>
+            <Text style={[styles.sectionCaption, { color: palette.muted }]}>
               Jika sensor membaca benturan keras, sistem akan menunggu konfirmasi 10 detik.
             </Text>
           </View>

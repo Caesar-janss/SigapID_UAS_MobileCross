@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useEmergencyReport } from "@/hooks/useEmergencyReports";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
 import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
@@ -15,6 +16,7 @@ import {
 } from "@/components/app/MockAppUI";
 
 export default function OperatorReportDetail() {
+  const { palette } = useAppTheme();
   const params = useLocalSearchParams<{ reportId?: string }>();
   const { report, loading, error } = useEmergencyReport(params.reportId);
   const { acceptReport, finishReport } = useEmergencyActions();
@@ -58,7 +60,9 @@ export default function OperatorReportDetail() {
         subtitle="Mengambil detail laporan dari backend."
       >
         <Card>
-          <Text style={styles.reporterMeta}>Sebentar, data sedang dimuat.</Text>
+          <Text style={[styles.reporterMeta, { color: palette.muted }]}>
+            Sebentar, data sedang dimuat.
+          </Text>
         </Card>
       </ScreenShell>
     );
@@ -119,24 +123,45 @@ export default function OperatorReportDetail() {
       <Card style={styles.reporterCard}>
         <View style={styles.reporterHeader}>
           <View style={styles.reporterText}>
-            <Text style={styles.reporterName}>
+            <Text style={[styles.reporterName, { color: palette.text }]}>
               {report.reporter?.full_name ?? "Pelapor"}
             </Text>
-            <Text style={styles.reporterMeta}>
+            <Text style={[styles.reporterMeta, { color: palette.muted }]}>
               {report.reporter?.phone || report.reporter?.email || "Kontak belum tersedia"}
             </Text>
           </View>
           <StatusPill label={emergencyTypeLabel(report.type)} tone="danger" />
         </View>
         <View style={styles.tags}>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{report.call_room ?? "Call room belum ada"}</Text>
+          <View
+            style={[
+              styles.tag,
+              { backgroundColor: palette.cardSoft, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.tagText, { color: palette.text }]}>
+              {report.call_room ?? "Call room belum ada"}
+            </Text>
           </View>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{report.sensor_detected ? "Sensor aktif" : "Manual"}</Text>
+          <View
+            style={[
+              styles.tag,
+              { backgroundColor: palette.cardSoft, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.tagText, { color: palette.text }]}>
+              {report.sensor_detected ? "Sensor aktif" : "Manual"}
+            </Text>
           </View>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{report.description ?? report.title ?? "Tanpa catatan"}</Text>
+          <View
+            style={[
+              styles.tag,
+              { backgroundColor: palette.cardSoft, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.tagText, { color: palette.text }]}>
+              {report.description ?? report.title ?? "Tanpa catatan"}
+            </Text>
           </View>
         </View>
       </Card>

@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useOperatorReports } from "@/hooks/useEmergencyReports";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
 import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
@@ -14,6 +15,7 @@ import {
 } from "@/components/app/MockAppUI";
 
 export default function OperatorDashboard() {
+  const { palette } = useAppTheme();
   const { activeReports, loading, error } = useOperatorReports();
   const { acceptReport } = useEmergencyActions();
 
@@ -40,16 +42,22 @@ export default function OperatorDashboard() {
       <View style={styles.list}>
         {loading ? (
           <Card>
-            <Text style={styles.reportMeta}>Memuat laporan masuk...</Text>
+            <Text style={[styles.reportMeta, { color: palette.muted }]}>
+              Memuat laporan masuk...
+            </Text>
           </Card>
         ) : error ? (
           <Card>
-            <Text style={styles.reportMeta}>Data laporan gagal dimuat: {error}</Text>
+            <Text style={[styles.reportMeta, { color: palette.muted }]}>
+              Data laporan gagal dimuat: {error}
+            </Text>
           </Card>
         ) : activeReports.length === 0 ? (
           <Card>
-            <Text style={styles.reportTitle}>Belum ada laporan aktif</Text>
-            <Text style={styles.reportMeta}>
+            <Text style={[styles.reportTitle, { color: palette.text }]}>
+              Belum ada laporan aktif
+            </Text>
+            <Text style={[styles.reportMeta, { color: palette.muted }]}>
               Laporan baru akan muncul otomatis saat pelapor mengirim darurat.
             </Text>
           </Card>
@@ -58,10 +66,10 @@ export default function OperatorDashboard() {
           <Card key={report.id} style={styles.reportCard}>
             <View style={styles.reportHeader}>
               <View style={styles.reportText}>
-                <Text style={styles.reportTitle}>
+                <Text style={[styles.reportTitle, { color: palette.text }]}>
                   {report.title ?? emergencyTypeLabel(report.type)}
                 </Text>
-                <Text style={styles.reportMeta}>
+                <Text style={[styles.reportMeta, { color: palette.muted }]}>
                   Pelapor: {report.reporter?.full_name ?? "Pelapor"} -{" "}
                   {formatRelativeTime(report.created_at)}
                 </Text>

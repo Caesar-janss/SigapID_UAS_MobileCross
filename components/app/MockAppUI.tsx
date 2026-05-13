@@ -12,11 +12,12 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Href, router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import MapView, { Marker } from "react-native-maps";
 import { colors, radius, shadow, spacing, typography } from "@/theme";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 type Role = "reporter" | "operator";
@@ -97,6 +98,9 @@ export function ScreenShell({
   subtitle,
   action,
   children,
+  backgroundColor,
+  titleColor,
+  subtitleColor,
   scroll = true,
 }: {
   role: Role;
@@ -105,14 +109,27 @@ export function ScreenShell({
   subtitle?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  backgroundColor?: string;
+  titleColor?: string;
+  subtitleColor?: string;
   scroll?: boolean;
 }) {
+  const { palette } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const screenBackground = backgroundColor ?? palette.background;
+  const resolvedTitleColor = titleColor ?? palette.text;
+  const resolvedSubtitleColor = subtitleColor ?? palette.muted;
+  const scrollPaddingBottom = (activeTab ? 116 : spacing.xl) + insets.bottom;
   const content = (
     <View style={[styles.content, !scroll && styles.contentFixed]}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>{title}</Text>
-          {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          <Text style={[styles.title, { color: resolvedTitleColor }]}>{title}</Text>
+          {!!subtitle && (
+            <Text style={[styles.subtitle, { color: resolvedSubtitleColor }]}>
+              {subtitle}
+            </Text>
+          )}
         </View>
         {action}
       </View>
@@ -121,11 +138,17 @@ export function ScreenShell({
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: screenBackground }]}
+      edges={["top", "bottom"]}
+    >
       {scroll ? (
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          style={[styles.scroll, { backgroundColor: screenBackground }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: scrollPaddingBottom },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {content}
@@ -145,11 +168,19 @@ function BottomNav({
   role: Role;
   activeTab: ReporterTab | OperatorTab;
 }) {
+  const { palette } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const items = role === "reporter" ? reporterNavItems : operatorNavItems;
+  const bottomOffset = Math.max(spacing.md, insets.bottom + spacing.sm);
 
   return (
-    <View style={styles.bottomWrap}>
-      <View style={styles.bottomNav}>
+    <View style={[styles.bottomWrap, { bottom: bottomOffset }]}>
+      <View
+        style={[
+          styles.bottomNav,
+          { backgroundColor: palette.bottomNav, borderColor: palette.border },
+        ]}
+      >
         {items.map((item) => {
           const active = item.activeKey === activeTab;
           return (
@@ -161,9 +192,15 @@ function BottomNav({
               <MaterialCommunityIcons
                 name={item.icon}
                 size={18}
-                color={active ? colors.primary : colors.textSubtle}
+                color={active ? colors.primary : palette.subtle}
               />
-              <Text style={[styles.navLabel, active && styles.navLabelActive]}>
+              <Text
+                style={[
+                  styles.navLabel,
+                  { color: palette.subtle },
+                  active && styles.navLabelActive,
+                ]}
+              >
                 {item.label}
               </Text>
             </Pressable>
@@ -183,19 +220,24 @@ export function IconButton({
   onPress?: () => void;
   tone?: "neutral" | "primary" | "secondary" | "danger";
 }) {
+  const { palette } = useAppTheme();
   const color =
     tone === "danger"
       ? colors.danger
       : tone === "secondary"
-        ? colors.secondary
+        ? palette.secondary
         : tone === "primary"
           ? colors.primary
-          : colors.text;
+          : palette.text;
 
   return (
     <Pressable
       onPress={onPress ?? (() => showComingSoon("Aksi"))}
-      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.iconButton,
+        { backgroundColor: palette.surface, borderColor: palette.border },
+        pressed && styles.pressed,
+      ]}
     >
       <MaterialCommunityIcons name={icon} size={22} color={color} />
     </Pressable>
@@ -215,14 +257,22 @@ export function PrimaryAction({
   tone?: "primary" | "secondary" | "soft" | "danger";
   style?: StyleProp<ViewStyle>;
 }) {
+  const { palette } = useAppTheme();
+  const textColor = tone === "soft" ? colors.primary : colors.textInverse;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.actionButton,
-        tone === "secondary" && styles.actionSecondary,
-        tone === "soft" && styles.actionSoft,
-        tone === "danger" && styles.actionDanger,
+        tone === "primary" && { backgroundColor: colors.primary },
+        tone === "secondary" && { backgroundColor: "#2F80C5" },
+        tone === "soft" && {
+          backgroundColor: palette.secondarySoft,
+          borderWidth: 1,
+          borderColor: palette.borderStrong,
+        },
+        tone === "danger" && { backgroundColor: colors.danger },
         pressed && styles.pressed,
         style,
       ]}
@@ -231,13 +281,13 @@ export function PrimaryAction({
         <MaterialCommunityIcons
           name={icon}
           size={18}
-          color={tone === "soft" ? colors.primary : colors.textInverse}
+          color={textColor}
         />
       )}
       <Text
         style={[
           styles.actionText,
-          tone === "soft" && styles.actionTextSoft,
+          { color: textColor },
         ]}
       >
         {label}
@@ -253,7 +303,19 @@ export function Card({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  const { palette } = useAppTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: palette.card, borderColor: palette.border },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 export function StatusPill({
@@ -293,6 +355,7 @@ export function Avatar({
   imageUri?: string | null;
   onPress?: () => void;
 }) {
+  const { palette } = useAppTheme();
   const initial = name.trim().charAt(0).toUpperCase() || "U";
 
   const avatar = (
@@ -303,7 +366,7 @@ export function Avatar({
           width: size,
           height: size,
           borderRadius: Math.min(28, size / 3),
-          backgroundColor: tone === "primary" ? colors.primaryLight : colors.secondaryLight,
+          backgroundColor: tone === "primary" ? palette.primarySoft : palette.secondarySoft,
         },
       ]}
     >
@@ -323,7 +386,7 @@ export function Avatar({
         <Text
           style={[
             styles.avatarText,
-            { color: tone === "primary" ? colors.primary : colors.secondary },
+            { color: tone === "primary" ? colors.primary : palette.secondary },
           ]}
         >
           {initial}
@@ -356,6 +419,7 @@ export function MiniMap({
   operatorLatitude?: number | null;
   operatorLongitude?: number | null;
 }) {
+  const { palette } = useAppTheme();
   const hasLocation =
     typeof latitude === "number" && typeof longitude === "number";
   const hasOperatorLocation =
@@ -404,7 +468,7 @@ export function MiniMap({
   }
 
   return (
-    <View style={[styles.map, { height }]}>
+    <View style={[styles.map, { height, backgroundColor: palette.mapFallback }]}>
       <View style={[styles.road, styles.roadA]} />
       <View style={[styles.road, styles.roadB]} />
       <View style={[styles.road, styles.roadC]} />
@@ -426,12 +490,24 @@ export function InfoGrid({
 }: {
   items: { label: string; value: string }[];
 }) {
+  const { palette } = useAppTheme();
+
   return (
     <View style={styles.infoGrid}>
       {items.map((item) => (
-        <View key={`${item.label}-${item.value}`} style={styles.infoBox}>
-          <Text style={styles.infoLabel}>{item.label}</Text>
-          <Text style={styles.infoValue}>{item.value}</Text>
+        <View
+          key={`${item.label}-${item.value}`}
+          style={[
+            styles.infoBox,
+            { backgroundColor: palette.cardSoft, borderColor: palette.border },
+          ]}
+        >
+          <Text style={[styles.infoLabel, { color: palette.subtle }]}>
+            {item.label}
+          </Text>
+          <Text style={[styles.infoValue, { color: palette.text }]}>
+            {item.value}
+          </Text>
         </View>
       ))}
     </View>
@@ -451,13 +527,18 @@ export function FieldCard({
   onChangeText: (value: string) => void;
   secureTextEntry?: boolean;
 }) {
+  const { palette } = useAppTheme();
+
   return (
     <Card style={styles.fieldCard}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: palette.text }]}>{label}</Text>
       <TextInput
-        style={styles.fieldInput}
+        style={[
+          styles.fieldInput,
+          { backgroundColor: palette.input, color: palette.text },
+        ]}
         placeholder={placeholder}
-        placeholderTextColor="#CBD5E1"
+        placeholderTextColor={palette.subtle}
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry}
@@ -473,9 +554,31 @@ export function ChatBubble({
   children: React.ReactNode;
   mine?: boolean;
 }) {
+  const { palette } = useAppTheme();
+
   return (
-    <View style={[styles.chatBubble, mine && styles.chatBubbleMine]}>
-      <Text style={[styles.chatText, mine && styles.chatTextMine]}>
+    <View
+      style={[
+        styles.chatBubble,
+        {
+          backgroundColor: palette.card,
+          borderColor: palette.border,
+        },
+        mine && [
+          styles.chatBubbleMine,
+          {
+            backgroundColor: palette.secondarySoft,
+            borderColor: palette.borderStrong,
+          },
+        ],
+      ]}
+    >
+      <Text
+        style={[
+          styles.chatText,
+          { color: mine ? palette.secondary : palette.text },
+        ]}
+      >
         {children}
       </Text>
     </View>
@@ -521,12 +624,10 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.text,
     marginTop: spacing.xs,
   },
   subtitle: {
     ...typography.caption,
-    color: colors.textMuted,
     marginTop: spacing.xs,
     lineHeight: 19,
   },

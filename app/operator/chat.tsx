@@ -23,6 +23,7 @@ import {
   formatVoiceDuration,
   useVoiceNoteRecorder,
 } from "@/hooks/useVoiceNoteRecorder";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { emergencyStatusLabel } from "@/utils/format";
 import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
@@ -36,6 +37,7 @@ import { VoiceNoteBubble } from "@/components/app/VoiceNoteBubble";
 export default function OperatorChat() {
   const params = useLocalSearchParams<{ reportId?: string }>();
   const { profile } = useAuth();
+  const { palette } = useAppTheme();
   const { activeReports } = useOperatorReports();
   const reportId = params.reportId ?? activeReports[0]?.id;
   const { report } = useEmergencyReport(reportId);
@@ -166,9 +168,13 @@ export default function OperatorChat() {
           onContentSizeChange={() => scrollToLatest(false)}
         >
           {loading ? (
-            <Text style={styles.emptyText}>Memuat pesan...</Text>
+            <Text style={[styles.emptyText, { color: palette.muted }]}>
+              Memuat pesan...
+            </Text>
           ) : visibleMessages.length === 0 ? (
-            <Text style={styles.emptyText}>Belum ada pesan. Sapa pelapor dulu.</Text>
+            <Text style={[styles.emptyText, { color: palette.muted }]}>
+              Belum ada pesan. Sapa pelapor dulu.
+            </Text>
           ) : (
             visibleMessages.map((message) =>
               message.kind === "voice" ? (
@@ -189,19 +195,29 @@ export default function OperatorChat() {
 
         <View style={styles.composer}>
           {isRecording && (
-            <View style={styles.recordingBar}>
+            <View
+              style={[
+                styles.recordingBar,
+                { backgroundColor: palette.primarySoft },
+              ]}
+            >
               <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>
+              <Text style={[styles.recordingText, { color: palette.primary }]}>
                 Merekam {formatVoiceDuration(durationSeconds)}
               </Text>
             </View>
           )}
 
-          <View style={styles.inputBar}>
+          <View
+            style={[
+              styles.inputBar,
+              { backgroundColor: palette.input, borderColor: palette.border },
+            ]}
+          >
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: palette.text }]}
               placeholder="Tulis pesan..."
-              placeholderTextColor={colors.textSubtle}
+              placeholderTextColor={palette.subtle}
               value={draft}
               onChangeText={setDraft}
               editable={!sending && !!reportId && !isRecording}
@@ -209,7 +225,7 @@ export default function OperatorChat() {
             <MaterialCommunityIcons
               name="send"
               size={20}
-              color={colors.text}
+              color={palette.text}
               onPress={handleSend}
             />
           </View>

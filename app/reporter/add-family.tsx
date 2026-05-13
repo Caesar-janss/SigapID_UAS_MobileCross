@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, StyleSheet, Text } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { supabase } from "@/utils/supabase";
 import { colors, spacing, typography } from "@/theme";
 import {
@@ -13,6 +14,7 @@ import {
 
 export default function ReporterAddFamily() {
   const { profile } = useAuth();
+  const { palette, mode } = useAppTheme();
   const [familyId, setFamilyId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -83,14 +85,24 @@ export default function ReporterAddFamily() {
       title="Keluarga"
       subtitle="Gunakan ID akun agar pencarian anggota keluarga tidak tertukar nama."
     >
-      <Card style={styles.heroCard}>
+      <Card
+        style={[
+          styles.heroCard,
+          {
+            backgroundColor: mode === "dark" ? palette.cardSoft : "#FFF7F7",
+            borderColor: "#FECACA",
+          },
+        ]}
+      >
         <MaterialCommunityIcons
           name="account-plus-outline"
           size={34}
           color={colors.primary}
         />
-        <Text style={styles.heroTitle}>Tambah Guardian</Text>
-        <Text style={styles.heroText}>
+        <Text style={[styles.heroTitle, { color: palette.text }]}>
+          Tambah Guardian
+        </Text>
+        <Text style={[styles.heroText, { color: palette.muted }]}>
           Minta ID akun dari anggota keluarga yang ingin dipantau.
         </Text>
       </Card>
