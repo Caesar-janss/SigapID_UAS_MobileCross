@@ -74,6 +74,25 @@ function isActiveDispatch(status: UnitDispatchStatus) {
   return activeDispatchStatuses.includes(status);
 }
 
+function hasDispatchLocation(dispatch: UnitDispatch) {
+  return (
+    typeof dispatch.current_latitude === "number" &&
+    typeof dispatch.current_longitude === "number"
+  );
+}
+
+function sortDispatches(dispatches: UnitDispatch[]) {
+  return [...dispatches].sort((a, b) => {
+    if (hasDispatchLocation(a) !== hasDispatchLocation(b)) {
+      return hasDispatchLocation(a) ? -1 : 1;
+    }
+
+    return (
+      new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime()
+    );
+  });
+}
+
 function dispatchStorageError(message: string) {
   const lowerMessage = message.toLowerCase();
 
@@ -130,15 +149,33 @@ export function useReportDispatches(reportId?: string) {
       .order("assigned_at", { ascending: false });
 
     if (queryError) {
-      if (!options?.silent) {
-        setDispatches([]);
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("unit_dispatches")
+        .select("*")
+        .eq("report_id", reportId)
+        .order("assigned_at", { ascending: false });
+
+      if (fallbackError) {
+        if (!options?.silent) {
+          setDispatches([]);
+        }
+        setError(dispatchStorageError(fallbackError.message));
+        setLoading(false);
+        return;
       }
-      setError(dispatchStorageError(queryError.message));
+
+      setDispatches(
+        sortDispatches(
+          ((fallbackData ?? []) as unknown as UnitDispatch[]).map(normalizeDispatch),
+        ),
+      );
       setLoading(false);
       return;
     }
 
-    setDispatches(((data ?? []) as unknown as UnitDispatch[]).map(normalizeDispatch));
+    setDispatches(
+      sortDispatches(((data ?? []) as unknown as UnitDispatch[]).map(normalizeDispatch)),
+    );
     setLoading(false);
   }, [reportId]);
 
@@ -175,7 +212,10 @@ export function useReportDispatches(reportId?: string) {
   }, [loadDispatches, reportId]);
 
   const activeDispatches = useMemo(
-    () => dispatches.filter((dispatch) => isActiveDispatch(dispatch.status)),
+    () =>
+      sortDispatches(
+        dispatches.filter((dispatch) => isActiveDispatch(dispatch.status)),
+      ),
     [dispatches],
   );
 

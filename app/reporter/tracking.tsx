@@ -184,6 +184,12 @@ export default function ReporterTracking() {
                   : "Belum dikirim",
               },
               {
+                label: "Lokasi Unit",
+                value: latestActiveDispatch?.last_location_at
+                  ? formatRelativeTime(latestActiveDispatch.last_location_at)
+                  : "Belum dikirim",
+              },
+              {
                 label: "Lokasi",
                 value:
                   typeof active.latitude === "number" &&
