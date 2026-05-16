@@ -3,9 +3,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
-import { useFamilyMembers } from "@/hooks/useFamilyMembers";
+import {
+  useFamilyActiveReports,
+  useFamilyMembers,
+} from "@/hooks/useFamilyMembers";
 import { useEmergencyActions } from "@/hooks/useEmergencyReports";
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { emergencyTypeLabel } from "@/utils/format";
 import { EmergencyType, FamilyMemberWithProfile } from "@/types";
 import { colors, radius, spacing, typography } from "@/theme";
 import {
@@ -57,6 +61,12 @@ export default function ReporterDashboard() {
   const { profile } = useAuth();
   const { palette, mode } = useAppTheme();
   const { members, loading: familyLoading, error: familyError } = useFamilyMembers();
+  const {
+    reports: familyActiveReports,
+    reportsByProfileId,
+    loading: familyReportsLoading,
+    error: familyReportsError,
+  } = useFamilyActiveReports(members, profile?.id);
   const { createReport } = useEmergencyActions();
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const name = profile?.full_name ?? "User";
@@ -64,6 +74,15 @@ export default function ReporterDashboard() {
   const pendingIncomingCount = members.filter(
     (member) => member.member_id === profile?.id && member.status === "pending",
   ).length;
+  const familyStatusCaption = familyLoading
+    ? "Memuat anggota keluarga..."
+    : familyReportsLoading
+      ? "Mengecek status darurat keluarga..."
+      : familyActiveReports.length > 0
+        ? `${familyActiveReports.length} keluarga darurat`
+        : pendingIncomingCount > 0
+          ? `${pendingIncomingCount} permintaan masuk`
+          : `${members.length} anggota dipantau`;
 
   const handleCreateReport = async (
     type: EmergencyType,
@@ -107,11 +126,7 @@ export default function ReporterDashboard() {
               Monitoring Keluarga
             </Text>
             <Text style={[styles.sectionCaption, { color: palette.muted }]}>
-              {familyLoading
-                ? "Memuat anggota keluarga..."
-                : pendingIncomingCount > 0
-                  ? `${pendingIncomingCount} permintaan masuk`
-                  : `${members.length} anggota dipantau`}
+              {familyStatusCaption}
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -144,38 +159,65 @@ export default function ReporterDashboard() {
           <Text style={[styles.emptyText, { color: palette.muted }]}>
             Data keluarga belum bisa dimuat: {familyError}
           </Text>
+        ) : familyReportsError ? (
+          <Text style={[styles.emptyText, { color: palette.muted }]}>
+            Status darurat keluarga belum bisa dimuat: {familyReportsError}
+          </Text>
         ) : visibleMembers.length > 0 ? (
           <View style={styles.familyGrid}>
-            {visibleMembers.map((member) => (
-              <View
-                key={member.id}
-                style={[
-                  styles.familyStatus,
-                  { backgroundColor: palette.cardSoft, borderColor: palette.border },
-                ]}
-              >
-                <Text style={[styles.familyName, { color: palette.text }]}>
-                  {getDisplayProfile(member, profile?.id)?.full_name ??
-                    "Anggota keluarga"}
-                </Text>
-                <StatusPill
-                  label={
-                    member.member_id === profile?.id && member.status === "pending"
-                      ? "Perlu respon"
-                      : member.status === "accepted"
-                        ? "Aman"
-                        : "Menunggu"
-                  }
-                  tone={
-                    member.status === "accepted"
-                      ? "success"
-                      : member.member_id === profile?.id
-                        ? "danger"
-                        : "warning"
-                  }
-                />
-              </View>
-            ))}
+            {visibleMembers.map((member) => {
+              const displayProfile = getDisplayProfile(member, profile?.id);
+              const activeFamilyReport = displayProfile?.id
+                ? reportsByProfileId.get(displayProfile.id)
+                : null;
+              const needsResponse =
+                member.member_id === profile?.id && member.status === "pending";
+              const statusLabel = activeFamilyReport
+                ? `${emergencyTypeLabel(activeFamilyReport.type)} darurat`
+                : needsResponse
+                  ? "Perlu respon"
+                  : member.status === "accepted"
+                    ? "Aman"
+                    : "Menunggu";
+              const statusTone = activeFamilyReport
+                ? "danger"
+                : member.status === "accepted"
+                  ? "success"
+                  : needsResponse
+                    ? "danger"
+                    : "warning";
+
+              return (
+                <Pressable
+                  key={member.id}
+                  onPress={() => {
+                    if (!activeFamilyReport?.id) return;
+
+                    router.push({
+                      pathname: "/reporter/tracking",
+                      params: { reportId: activeFamilyReport.id },
+                    });
+                  }}
+                  style={({ pressed }) => [
+                    styles.familyStatus,
+                    {
+                      backgroundColor: activeFamilyReport
+                        ? mode === "dark"
+                          ? palette.cardSoft
+                          : "#FFF7F7"
+                        : palette.cardSoft,
+                      borderColor: activeFamilyReport ? "#FCA5A5" : palette.border,
+                    },
+                    pressed && activeFamilyReport && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.familyName, { color: palette.text }]}>
+                    {displayProfile?.full_name ?? "Anggota keluarga"}
+                  </Text>
+                  <StatusPill label={statusLabel} tone={statusTone} />
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           <View

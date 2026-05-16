@@ -414,6 +414,43 @@ as $$
   );
 $$;
 
+create or replace function public.get_family_active_reports()
+returns setof public.emergency_reports
+language sql
+security definer
+set search_path = public
+as $$
+  select distinct emergency_reports.*
+  from public.emergency_reports
+  join public.family_members
+    on family_members.status = 'accepted'
+    and (
+      (
+        family_members.owner_id = auth.uid()
+        and family_members.member_id in (
+          emergency_reports.reporter_id,
+          emergency_reports.subject_profile_id
+        )
+      )
+      or
+      (
+        family_members.member_id = auth.uid()
+        and family_members.owner_id in (
+          emergency_reports.reporter_id,
+          emergency_reports.subject_profile_id
+        )
+      )
+    )
+  where emergency_reports.status in (
+    'pending',
+    'assigned',
+    'accepted',
+    'on_route',
+    'arrived'
+  )
+  order by emergency_reports.created_at desc;
+$$;
+
 create or replace function public.assign_operator_to_report(target_report_id uuid)
 returns uuid
 language plpgsql
@@ -787,6 +824,7 @@ grant execute on function public.has_unit_dispatch(uuid, uuid) to authenticated;
 grant execute on function public.is_report_owner(uuid) to authenticated;
 grant execute on function public.can_access_report(uuid) to authenticated;
 grant execute on function public.can_read_profile_from_report(uuid) to authenticated;
+grant execute on function public.get_family_active_reports() to authenticated;
 grant execute on function public.assign_operator_to_report(uuid) to authenticated;
 grant execute on function public.claim_report_for_operator(uuid) to authenticated;
 grant execute on function public.dispatch_report_to_unit(uuid, text) to authenticated;
@@ -1044,8 +1082,23 @@ using (
     select 1
     from public.family_members
     where family_members.status = 'accepted'
-      and family_members.owner_id = auth.uid()
-      and family_members.member_id = emergency_reports.subject_profile_id
+      and (
+        (
+          family_members.owner_id = auth.uid()
+          and family_members.member_id in (
+            emergency_reports.reporter_id,
+            emergency_reports.subject_profile_id
+          )
+        )
+        or
+        (
+          family_members.member_id = auth.uid()
+          and family_members.owner_id in (
+            emergency_reports.reporter_id,
+            emergency_reports.subject_profile_id
+          )
+        )
+      )
   )
 );
 

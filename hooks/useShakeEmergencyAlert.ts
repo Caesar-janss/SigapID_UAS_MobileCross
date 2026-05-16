@@ -6,6 +6,11 @@ import { Accelerometer } from "expo-sensors";
 const updateIntervalMs = 180;
 const shakeThreshold = 2.65;
 const triggerCooldownMs = 18_000;
+let suppressedUntil = 0;
+
+export function snoozeShakeEmergencyAlert(durationMs = 30_000) {
+  suppressedUntil = Math.max(suppressedUntil, Date.now() + durationMs);
+}
 
 export function useShakeEmergencyAlert() {
   const pathname = usePathname();
@@ -30,6 +35,7 @@ export function useShakeEmergencyAlert() {
       if (pathnameRef.current.includes("/emergency-alert")) return;
 
       const now = Date.now();
+      if (now < suppressedUntil) return;
       if (now - lastTriggerAtRef.current < triggerCooldownMs) return;
 
       const force = Math.sqrt(x * x + y * y + z * z);

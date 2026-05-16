@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEmergencyActions } from "@/hooks/useEmergencyReports";
+import { snoozeShakeEmergencyAlert } from "@/hooks/useShakeEmergencyAlert";
 import { colors, shadow, spacing, typography } from "@/theme";
 import {
   IconButton,
@@ -15,6 +16,7 @@ export default function ReporterEmergencyAlert() {
   const [countdown, setCountdown] = useState(10);
   const sendingRef = useRef(false);
   const cancelledRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSensorReport = useCallback(async () => {
     if (cancelledRef.current) return;
@@ -46,7 +48,14 @@ export default function ReporterEmergencyAlert() {
   const handleCancel = useCallback(() => {
     cancelledRef.current = true;
     sendingRef.current = true;
-    router.replace("/reporter/tracking" as Href);
+    snoozeShakeEmergencyAlert();
+
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    router.replace("/reporter/dashboard" as Href);
   }, []);
 
   useEffect(() => {
@@ -57,12 +66,16 @@ export default function ReporterEmergencyAlert() {
       return;
     }
 
-    const timer = setTimeout(() => {
+    timerRef.current = setTimeout(() => {
+      if (cancelledRef.current) return;
       setCountdown((current) => Math.max(0, current - 1));
     }, 1000);
 
     return () => {
-      clearTimeout(timer);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [countdown, handleSensorReport]);
 
