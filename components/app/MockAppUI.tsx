@@ -424,24 +424,30 @@ export function MiniMap({
     typeof latitude === "number" && typeof longitude === "number";
   const hasOperatorLocation =
     typeof operatorLatitude === "number" && typeof operatorLongitude === "number";
+  const mapRegion =
+    hasLocation && hasOperatorLocation
+      ? {
+          latitude: (latitude + operatorLatitude) / 2,
+          longitude: (longitude + operatorLongitude) / 2,
+          latitudeDelta: Math.max(0.012, Math.abs(latitude - operatorLatitude) * 2.4),
+          longitudeDelta: Math.max(0.012, Math.abs(longitude - operatorLongitude) * 2.4),
+        }
+      : hasLocation
+        ? {
+            latitude,
+            longitude,
+            latitudeDelta: 0.012,
+            longitudeDelta: 0.012,
+          }
+        : null;
 
   if (hasLocation && Platform.OS !== "web") {
     return (
       <View style={[styles.map, { height }]}>
         <MapView
           style={styles.liveMap}
-          initialRegion={{
-            latitude,
-            longitude,
-            latitudeDelta: 0.012,
-            longitudeDelta: 0.012,
-          }}
-          region={{
-            latitude,
-            longitude,
-            latitudeDelta: 0.012,
-            longitudeDelta: 0.012,
-          }}
+          initialRegion={mapRegion ?? undefined}
+          region={mapRegion ?? undefined}
           scrollEnabled={height > 150}
           zoomEnabled={height > 150}
           pitchEnabled={false}

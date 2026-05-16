@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -26,6 +27,21 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<UserRole>("reporter");
   const [unitType, setUnitType] = useState<UnitType | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setKeyboardOpen(true);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardOpen(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const handleSubmit = async () => {
     const err: Record<string, string> = {};
@@ -60,11 +76,17 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 18}
       >
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[
+            styles.container,
+            keyboardOpen && styles.containerKeyboardOpen,
+          ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
         >
           <Text style={[typography.h1, { color: colors.text }]}>
             Buat Akun Baru
@@ -212,6 +234,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxxl,
+  },
+  containerKeyboardOpen: {
+    paddingBottom: 320,
   },
   subtitle: { color: colors.textMuted, marginTop: 4, marginBottom: spacing.xl },
   roleRow: {

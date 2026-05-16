@@ -754,7 +754,7 @@ begin
     last_location_at = now()
   where id = target_dispatch_id
     and responder_id = auth.uid()
-    and status in ('accepted', 'on_route', 'arrived')
+    and status in ('sent', 'accepted', 'on_route', 'arrived')
   returning id into target_dispatch_id;
 
   if target_dispatch_id is null then

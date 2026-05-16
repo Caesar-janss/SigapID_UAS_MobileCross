@@ -190,7 +190,7 @@ function UnitOperatorDashboard() {
   const { activeDispatches, loading, error, reload } = useUnitOperatorDispatches();
   const { updateDispatchStatus, updateDispatchLocation } = useUnitDispatchActions();
   const movingDispatch = activeDispatches.find((dispatch) =>
-    ["accepted", "on_route", "arrived"].includes(dispatch.status),
+    ["sent", "accepted", "on_route", "arrived"].includes(dispatch.status),
   );
 
   useEffect(() => {
