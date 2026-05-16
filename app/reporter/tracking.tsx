@@ -5,8 +5,15 @@ import {
   useEmergencyReport,
   useReporterReports,
 } from "@/hooks/useEmergencyReports";
+import { useReportDispatches } from "@/hooks/useUnitDispatches";
 import { useAppTheme } from "@/hooks/useAppTheme";
-import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
+import {
+  emergencyStatusLabel,
+  emergencyTypeLabel,
+  formatRelativeTime,
+  unitDispatchStatusLabel,
+  unitTypeLabel,
+} from "@/utils/format";
 import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
@@ -26,6 +33,7 @@ export default function ReporterTracking() {
   const { activeReport, loading: activeLoading } = useReporterReports();
   const targetReportId = params.reportId ?? activeReport?.id;
   const { report, loading, error, reload } = useEmergencyReport(targetReportId);
+  const { latestActiveDispatch } = useReportDispatches(targetReportId);
   const { finishReport, updateReportLocation } = useEmergencyActions();
   const active = report ?? activeReport;
 
@@ -142,6 +150,8 @@ export default function ReporterTracking() {
           height={260}
           latitude={active.latitude}
           longitude={active.longitude}
+          operatorLatitude={latestActiveDispatch?.current_latitude}
+          operatorLongitude={latestActiveDispatch?.current_longitude}
         />
         <View style={styles.trackingBody}>
           <View style={styles.statusRow}>
@@ -151,7 +161,9 @@ export default function ReporterTracking() {
               </Text>
               <Text style={[styles.sectionCaption, { color: palette.muted }]}>
                 {active.assigned_operator?.full_name
-                  ? `Terhubung dengan ${active.assigned_operator.full_name}.`
+                  ? latestActiveDispatch
+                    ? `${unitTypeLabel(latestActiveDispatch.unit_type)} ${unitDispatchStatusLabel(latestActiveDispatch.status).toLowerCase()}.`
+                    : `Terhubung dengan ${active.assigned_operator.full_name}.`
                   : "Sistem sedang mencari operator yang tersedia."}
               </Text>
             </View>
@@ -165,6 +177,12 @@ export default function ReporterTracking() {
             items={[
               { label: "Prioritas", value: active.priority },
               { label: "Operator", value: active.assigned_operator?.full_name ?? "Mencari" },
+              {
+                label: "Unit",
+                value: latestActiveDispatch
+                  ? `${unitTypeLabel(latestActiveDispatch.unit_type)} - ${unitDispatchStatusLabel(latestActiveDispatch.status)}`
+                  : "Belum dikirim",
+              },
               {
                 label: "Lokasi",
                 value:

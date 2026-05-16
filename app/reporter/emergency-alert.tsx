@@ -8,15 +8,16 @@ import {
   IconButton,
   PrimaryAction,
   ScreenShell,
-  navigateTo,
 } from "@/components/app/MockAppUI";
 
 export default function ReporterEmergencyAlert() {
   const { createReport } = useEmergencyActions();
   const [countdown, setCountdown] = useState(10);
   const sendingRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   const handleSensorReport = useCallback(async () => {
+    if (cancelledRef.current) return;
     if (sendingRef.current) return;
     sendingRef.current = true;
 
@@ -42,7 +43,15 @@ export default function ReporterEmergencyAlert() {
     }
   }, [createReport]);
 
+  const handleCancel = useCallback(() => {
+    cancelledRef.current = true;
+    sendingRef.current = true;
+    router.replace("/reporter/tracking" as Href);
+  }, []);
+
   useEffect(() => {
+    if (cancelledRef.current) return;
+
     if (countdown <= 0) {
       handleSensorReport();
       return;
@@ -62,7 +71,7 @@ export default function ReporterEmergencyAlert() {
       role="reporter"
       title="Peringatan Darurat"
       subtitle="Sensor mendeteksi kondisi tidak biasa."
-      action={<IconButton icon="close" onPress={() => navigateTo("/reporter/tracking" as Href)} />}
+      action={<IconButton icon="close" onPress={handleCancel} />}
     >
       <View style={styles.alertPanel}>
         <View style={styles.ringOuter}>
@@ -93,7 +102,7 @@ export default function ReporterEmergencyAlert() {
         <PrimaryAction
           label="Batalkan"
           tone="soft"
-          onPress={() => navigateTo("/reporter/tracking" as Href)}
+          onPress={handleCancel}
         />
       </View>
     </ScreenShell>

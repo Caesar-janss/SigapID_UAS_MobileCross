@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
 import { colors, radius, spacing, typography } from "@/theme";
-import { UserRole } from "@/types";
+import { UnitType, UserRole } from "@/types";
 
 export default function RegisterScreen() {
   const { signUp, loading } = useAuth();
@@ -24,6 +24,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("reporter");
+  const [unitType, setUnitType] = useState<UnitType | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async () => {
@@ -35,7 +36,13 @@ export default function RegisterScreen() {
     if (Object.keys(err).length > 0) return;
 
     try {
-      await signUp(email.trim().toLowerCase(), password, fullName.trim(), role);
+      await signUp(
+        email.trim().toLowerCase(),
+        password,
+        fullName.trim(),
+        role,
+        role === "dispatcher" ? unitType : null,
+      );
       Alert.alert(
         "Pendaftaran berhasil",
         "Silakan masuk dengan akun yang baru dibuat.",
@@ -63,25 +70,62 @@ export default function RegisterScreen() {
             Buat Akun Baru
           </Text>
           <Text style={[typography.body, styles.subtitle]}>
-            Daftar sebagai pelapor atau operator
+            Daftar sebagai pelapor, operator pusat, atau petugas lapangan
           </Text>
 
           <View style={styles.roleRow}>
             <RoleCard
               selected={role === "reporter"}
-              onPress={() => setRole("reporter")}
+              onPress={() => {
+                setRole("reporter");
+                setUnitType(null);
+              }}
               icon="account-alert-outline"
               title="Pelapor"
               description="Saya butuh bantuan darurat"
             />
             <RoleCard
-              selected={role === "dispatcher"}
-              onPress={() => setRole("dispatcher")}
+              selected={role === "dispatcher" && !unitType}
+              onPress={() => {
+                setRole("dispatcher");
+                setUnitType(null);
+              }}
               icon="headset"
-              title="Operator"
+              title="Operator Pusat"
               description="Saya menerima laporan"
             />
+            <RoleCard
+              selected={role === "dispatcher" && unitType === "ambulance"}
+              onPress={() => {
+                setRole("dispatcher");
+                setUnitType("ambulance");
+              }}
+              icon="ambulance"
+              title="Ambulans"
+              description="Petugas medis lapangan"
+            />
+            <RoleCard
+              selected={role === "dispatcher" && unitType === "police"}
+              onPress={() => {
+                setRole("dispatcher");
+                setUnitType("police");
+              }}
+              icon="police-badge-outline"
+              title="Polisi"
+              description="Petugas keamanan"
+            />
+            <RoleCard
+              selected={role === "dispatcher" && unitType === "firefighter"}
+              onPress={() => {
+                setRole("dispatcher");
+                setUnitType("firefighter");
+              }}
+              icon="fire-truck"
+              title="Pemadam"
+              description="Petugas kebakaran"
+            />
           </View>
+          {!!errors.role && <Text style={styles.roleError}>{errors.role}</Text>}
 
           <Input
             label="Nama Lengkap"
@@ -170,9 +214,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   subtitle: { color: colors.textMuted, marginTop: 4, marginBottom: spacing.xl },
-  roleRow: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl },
+  roleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
   roleCard: {
     flex: 1,
+    minWidth: "45%",
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
@@ -201,6 +251,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
     marginTop: 2,
+  },
+  roleError: {
+    ...typography.caption,
+    color: colors.danger,
+    marginBottom: spacing.lg,
   },
   footerRow: {
     flexDirection: "row",

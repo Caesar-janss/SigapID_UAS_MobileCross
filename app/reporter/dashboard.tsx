@@ -202,7 +202,7 @@ export default function ReporterDashboard() {
 
       <Card style={styles.reportCard}>
         <View style={styles.sectionHeader}>
-          <View>
+          <View style={styles.sectionHeaderText}>
             <Text style={[styles.sectionTitle, { color: palette.text }]}>
               Tombol Darurat
             </Text>
@@ -213,7 +213,13 @@ export default function ReporterDashboard() {
           <IconButton
             icon="bell-alert-outline"
             tone="danger"
-            onPress={() => navigateTo("/reporter/emergency-alert" as Href)}
+            onPress={() =>
+              handleCreateReport(
+                "sos",
+                "SOS - Laporan Darurat",
+                "Pelapor tidak sempat memilih kategori detail.",
+              )
+            }
           />
         </View>
 
@@ -315,7 +321,6 @@ export default function ReporterDashboard() {
                   </View>
                 </Pressable>
               ))}
-
               <Pressable
                 onPress={() =>
                   handleCreateReport(
@@ -326,7 +331,6 @@ export default function ReporterDashboard() {
                 }
                 style={({ pressed }) => [
                   styles.categoryChoice,
-                  styles.sosChoice,
                   {
                     backgroundColor: mode === "dark" ? palette.cardSoft : "#FFF7F7",
                     borderColor: "#FECACA",
@@ -335,7 +339,7 @@ export default function ReporterDashboard() {
                 ]}
               >
                 <MaterialCommunityIcons
-                  name="alert-circle-outline"
+                  name="bell-alert-outline"
                   size={22}
                   color={colors.danger}
                 />
@@ -344,10 +348,11 @@ export default function ReporterDashboard() {
                     SOS
                   </Text>
                   <Text style={[styles.categoryCaption, { color: palette.muted }]}>
-                    Untuk kondisi darurat yang belum bisa dijelaskan.
+                    Darurat cepat saat kategori belum sempat dijelaskan.
                   </Text>
                 </View>
               </Pressable>
+
             </View>
 
             <PrimaryAction
@@ -378,6 +383,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
+  },
+  sectionHeaderText: {
+    flex: 1,
   },
   sectionTitle: {
     ...typography.bodyStrong,
@@ -508,10 +516,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: "#F8FEFF",
     padding: spacing.md,
-  },
-  sosChoice: {
-    borderColor: "#FECACA",
-    backgroundColor: "#FFF7F7",
   },
   categoryText: {
     flex: 1,

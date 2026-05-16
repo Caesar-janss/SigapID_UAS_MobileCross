@@ -458,7 +458,7 @@ export function MiniMap({
                 latitude: operatorLatitude,
                 longitude: operatorLongitude,
               }}
-              title="Operator"
+              title="Unit bantuan"
               pinColor={colors.success}
             />
           )}

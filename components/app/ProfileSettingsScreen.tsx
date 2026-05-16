@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import {
   Alert,
@@ -16,9 +16,21 @@ import { useProfileAvatar } from "@/hooks/useProfileAvatar";
 import { AppPalette, useAppTheme } from "@/hooks/useAppTheme";
 import { supabase } from "@/utils/supabase";
 import { colors, radius, shadow, spacing, typography } from "@/theme";
+import { UnitType } from "@/types";
 import { PrimaryAction, ScreenShell } from "@/components/app/MockAppUI";
 
 type Role = "reporter" | "operator";
+
+const unitOptions: {
+  value: UnitType | null;
+  label: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+}[] = [
+  { value: null, label: "Operator Pusat", icon: "headset" },
+  { value: "ambulance", label: "Ambulans", icon: "ambulance" },
+  { value: "police", label: "Polisi", icon: "police-badge-outline" },
+  { value: "firefighter", label: "Pemadam", icon: "fire-truck" },
+];
 
 export function ProfileSettingsScreen({
   role,
@@ -39,6 +51,9 @@ export function ProfileSettingsScreen({
   const [name, setName] = useState(profile?.full_name ?? "");
   const [address, setAddress] = useState(profile?.address ?? "");
   const [password, setPassword] = useState("");
+  const [unitType, setUnitType] = useState<UnitType | null>(
+    profile?.unit_type ?? null,
+  );
   const [showPassword, setShowPassword] = useState(false);
   const { mode, palette, setMode } = useAppTheme();
   const { uploading, updateAvatar } = useProfileAvatar();
@@ -49,6 +64,15 @@ export function ProfileSettingsScreen({
 
   const screenRole = role === "operator" ? "operator" : "reporter";
   const signInRoute = "/auth/LoginScreen" as Href;
+  const isOperator = profile?.role === "dispatcher" || role === "operator";
+  const unitLabel =
+    unitOptions.find((option) => option.value === unitType)?.label ?? "Operator Pusat";
+
+  useEffect(() => {
+    setName(profile?.full_name ?? "");
+    setAddress(profile?.address ?? "");
+    setUnitType(profile?.unit_type ?? null);
+  }, [profile?.address, profile?.full_name, profile?.unit_type]);
 
   const themeAction = useMemo(
     () => (
@@ -96,6 +120,13 @@ export function ProfileSettingsScreen({
         .update({
           full_name: name.trim() || profile.full_name,
           address: address.trim() || null,
+          unit_type: isOperator ? unitType : null,
+          ...(isOperator
+            ? {
+                is_available: true,
+                last_active_at: new Date().toISOString(),
+              }
+            : {}),
         })
         .eq("id", profile.id);
 
@@ -106,6 +137,36 @@ export function ProfileSettingsScreen({
     } catch (error) {
       Alert.alert(
         "Gagal update profile",
+        error instanceof Error ? error.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const handleChangeUnitType = async (nextUnitType: UnitType | null) => {
+    const previousUnitType = unitType;
+    setUnitType(nextUnitType);
+
+    if (!profile?.id || !isOperator) {
+      return;
+    }
+
+    try {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          unit_type: nextUnitType,
+          is_available: true,
+          last_active_at: new Date().toISOString(),
+        })
+        .eq("id", profile.id);
+
+      if (profileError) throw new Error(profileError.message);
+
+      await refreshProfile();
+    } catch (error) {
+      setUnitType(previousUnitType);
+      Alert.alert(
+        "Gagal mengganti mode",
         error instanceof Error ? error.message : "Terjadi kesalahan.",
       );
     }
@@ -192,6 +253,11 @@ export function ProfileSettingsScreen({
         <Text style={[styles.meta, { color: colors.secondary }]}>
           ID: {profile?.user_code ?? "Belum tersedia"}
         </Text>
+        {isOperator && (
+          <Text style={[styles.meta, { color: colors.secondary }]}>
+            Mode: {unitLabel}
+          </Text>
+        )}
         <Text style={[styles.address, { color: palette.subtle }]}>
           {visibleAddress}
         </Text>
@@ -222,6 +288,13 @@ export function ProfileSettingsScreen({
           placeholder={addressFallback}
           palette={palette}
         />
+        {isOperator && (
+          <UnitTypeSelector
+            value={unitType}
+            onChange={handleChangeUnitType}
+            palette={palette}
+          />
+        )}
         <ProfileRow
           icon="lock-outline"
           label="Password"
@@ -270,6 +343,59 @@ export function ProfileSettingsScreen({
         </Pressable>
       </View>
     </ScreenShell>
+  );
+}
+
+function UnitTypeSelector({
+  value,
+  onChange,
+  palette,
+}: {
+  value: UnitType | null;
+  onChange: (value: UnitType | null) => void;
+  palette: AppPalette;
+}) {
+  return (
+    <View style={[styles.unitBox, { borderBottomColor: palette.rowBorder }]}>
+      <View style={styles.unitHeader}>
+        <MaterialCommunityIcons name="shield-account-outline" size={24} color={palette.muted} />
+        <Text style={[styles.rowLabel, { color: palette.text }]}>Mode</Text>
+      </View>
+      <View style={styles.unitChoices}>
+        {unitOptions.map((option) => {
+          const selected = option.value === value;
+
+          return (
+            <Pressable
+              key={option.value ?? "central"}
+              onPress={() => onChange(option.value)}
+              style={({ pressed }) => [
+                styles.unitChoice,
+                {
+                  backgroundColor: selected ? colors.secondary : palette.cardSoft,
+                  borderColor: selected ? colors.secondary : palette.border,
+                },
+                pressed && styles.pressed,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={option.icon}
+                size={17}
+                color={selected ? colors.textInverse : palette.muted}
+              />
+              <Text
+                style={[
+                  styles.unitChoiceText,
+                  { color: selected ? colors.textInverse : palette.text },
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -482,6 +608,34 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     ...typography.bodyStrong,
+  },
+  unitBox: {
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    paddingBottom: spacing.md,
+  },
+  unitHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  unitChoices: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  unitChoice: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+  },
+  unitChoiceText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
   showPassword: {
     flexDirection: "row",

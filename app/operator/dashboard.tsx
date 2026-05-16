@@ -1,20 +1,69 @@
 import { router } from "expo-router";
+import { useEffect } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useOperatorReports } from "@/hooks/useEmergencyReports";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  useUnitOperatorDispatches,
+  useUnitDispatchActions,
+} from "@/hooks/useUnitDispatches";
 import { useAppTheme } from "@/hooks/useAppTheme";
-import { emergencyStatusLabel, emergencyTypeLabel, formatRelativeTime } from "@/utils/format";
+import {
+  emergencyStatusLabel,
+  emergencyTypeLabel,
+  formatRelativeTime,
+  unitDispatchStatusLabel,
+  unitTypeLabel,
+} from "@/utils/format";
 import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
+import { UnitDispatch, UnitDispatchStatus } from "@/types";
 import {
   Card,
   IconButton,
+  InfoGrid,
   MiniMap,
   PrimaryAction,
   ScreenShell,
   StatusPill,
 } from "@/components/app/MockAppUI";
 
+const locationHeartbeatMs = 12_000;
+
+function nextStatus(dispatch: UnitDispatch): UnitDispatchStatus | null {
+  if (dispatch.status === "sent") return "accepted";
+  if (dispatch.status === "accepted") return "on_route";
+  if (dispatch.status === "on_route") return "arrived";
+  if (dispatch.status === "arrived") return "completed";
+  return null;
+}
+
+function nextStatusLabel(status: UnitDispatchStatus) {
+  if (status === "sent") return "Terima";
+  if (status === "accepted") return "Berangkat";
+  if (status === "on_route") return "Tiba";
+  if (status === "arrived") return "Selesai";
+  return "Update";
+}
+
+function dispatchTone(status: UnitDispatchStatus) {
+  if (status === "sent") return "warning" as const;
+  if (status === "completed") return "success" as const;
+  if (status === "cancelled") return "danger" as const;
+  return "info" as const;
+}
+
 export default function OperatorDashboard() {
+  const { profile } = useAuth();
+
+  if (profile?.unit_type) {
+    return <UnitOperatorDashboard />;
+  }
+
+  return <CentralOperatorDashboard />;
+}
+
+function CentralOperatorDashboard() {
   const { palette } = useAppTheme();
   const { activeReports, loading, error } = useOperatorReports();
   const { acceptReport } = useEmergencyActions();
@@ -26,6 +75,24 @@ export default function OperatorDashboard() {
     } catch (acceptError) {
       Alert.alert(
         "Gagal menerima laporan",
+        acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const handleOpenDetail = async (reportId: string, pending: boolean) => {
+    try {
+      if (pending) {
+        await acceptReport(reportId);
+      }
+
+      router.push({
+        pathname: "/operator/report-detail",
+        params: { reportId },
+      });
+    } catch (acceptError) {
+      Alert.alert(
+        "Gagal membuka detail",
         acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
       );
     }
@@ -102,22 +169,186 @@ export default function OperatorDashboard() {
                 onPress={() => handleAccept(report.id)}
               />
               <PrimaryAction
-                label={report.status === "pending" ? "Terima" : "Detail"}
+                label="Detail"
                 icon={report.status === "pending" ? "check-circle-outline" : "file-search-outline"}
                 tone="secondary"
                 style={styles.action}
-                onPress={() =>
-                  report.status === "pending"
-                    ? handleAccept(report.id)
-                    : router.push({
-                        pathname: "/operator/report-detail",
-                        params: { reportId: report.id },
-                      })
-                }
+                onPress={() => handleOpenDetail(report.id, report.status === "pending")}
               />
             </View>
           </Card>
         ))
+        )}
+      </View>
+    </ScreenShell>
+  );
+}
+
+function UnitOperatorDashboard() {
+  const { profile } = useAuth();
+  const { palette } = useAppTheme();
+  const { activeDispatches, loading, error, reload } = useUnitOperatorDispatches();
+  const { updateDispatchStatus, updateDispatchLocation } = useUnitDispatchActions();
+  const movingDispatch = activeDispatches.find((dispatch) =>
+    ["accepted", "on_route", "arrived"].includes(dispatch.status),
+  );
+
+  useEffect(() => {
+    if (!movingDispatch?.id) return;
+
+    updateDispatchLocation(movingDispatch.id).catch(() => undefined);
+    const interval = setInterval(() => {
+      updateDispatchLocation(movingDispatch.id).catch(() => undefined);
+    }, locationHeartbeatMs);
+
+    return () => clearInterval(interval);
+  }, [movingDispatch?.id, updateDispatchLocation]);
+
+  const handleStatusUpdate = async (dispatch: UnitDispatch) => {
+    const status = nextStatus(dispatch);
+    if (!status) return;
+
+    try {
+      await updateDispatchStatus(dispatch.id, status);
+
+      if (status !== "completed") {
+        await updateDispatchLocation(dispatch.id);
+      }
+
+      await reload({ silent: true });
+    } catch (statusError) {
+      Alert.alert(
+        "Gagal update tugas",
+        statusError instanceof Error ? statusError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  const handleLocationUpdate = async (dispatchId: string) => {
+    try {
+      await updateDispatchLocation(dispatchId);
+      await reload({ silent: true });
+      Alert.alert("Lokasi diperbarui", "Lokasi unit sudah dikirim ke operator pusat.");
+    } catch (locationError) {
+      Alert.alert(
+        "Gagal update lokasi",
+        locationError instanceof Error ? locationError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
+  return (
+    <ScreenShell
+      role="operator"
+      activeTab="home"
+      title={`Tugas ${unitTypeLabel(profile?.unit_type)}`}
+      subtitle="Tugas muncul setelah operator pusat mengirim unit ke laporan."
+      action={<IconButton icon="bell-outline" tone="secondary" />}
+    >
+      <View style={styles.list}>
+        {loading ? (
+          <Card>
+            <Text style={[styles.reportMeta, { color: palette.muted }]}>
+              Memuat tugas unit...
+            </Text>
+          </Card>
+        ) : error ? (
+          <Card>
+            <Text style={[styles.reportMeta, { color: palette.muted }]}>
+              Tugas gagal dimuat: {error}
+            </Text>
+          </Card>
+        ) : activeDispatches.length === 0 ? (
+          <Card>
+            <Text style={[styles.reportTitle, { color: palette.text }]}>
+              Belum ada tugas masuk
+            </Text>
+            <Text style={[styles.reportMeta, { color: palette.muted }]}>
+              Akun unit tidak mengambil laporan langsung. Tunggu operator pusat menekan kirim unit.
+            </Text>
+          </Card>
+        ) : (
+          activeDispatches.map((dispatch) => (
+            <Card key={dispatch.id} style={styles.reportCard}>
+              <View style={styles.reportHeader}>
+                <View style={styles.reportText}>
+                  <Text style={[styles.reportTitle, { color: palette.text }]}>
+                    {dispatch.report?.title ??
+                      emergencyTypeLabel(dispatch.report?.type ?? "sos")}
+                  </Text>
+                  <Text style={[styles.reportMeta, { color: palette.muted }]}>
+                    Pelapor: {dispatch.report?.reporter?.full_name ?? "Pelapor"} -{" "}
+                    {formatRelativeTime(dispatch.assigned_at)}
+                  </Text>
+                </View>
+                <StatusPill
+                  label={unitDispatchStatusLabel(dispatch.status)}
+                  tone={dispatchTone(dispatch.status)}
+                />
+              </View>
+
+              <MiniMap
+                height={150}
+                latitude={dispatch.report?.latitude}
+                longitude={dispatch.report?.longitude}
+                operatorLatitude={dispatch.current_latitude}
+                operatorLongitude={dispatch.current_longitude}
+              />
+
+              <InfoGrid
+                items={[
+                  {
+                    label: "Jenis",
+                    value: dispatch.report?.type
+                      ? emergencyTypeLabel(dispatch.report.type)
+                      : unitTypeLabel(dispatch.unit_type),
+                  },
+                  {
+                    label: "Alamat",
+                    value: dispatch.report?.address ?? "Alamat belum tersedia",
+                  },
+                  {
+                    label: "Koordinat",
+                    value:
+                      typeof dispatch.report?.latitude === "number" &&
+                      typeof dispatch.report?.longitude === "number"
+                        ? `${dispatch.report.latitude.toFixed(4)}, ${dispatch.report.longitude.toFixed(4)}`
+                        : "Belum ada",
+                  },
+                  {
+                    label: "Lokasi Unit",
+                    value: dispatch.last_location_at
+                      ? formatRelativeTime(dispatch.last_location_at)
+                      : "Belum dikirim",
+                  },
+                ]}
+              />
+
+              <View style={styles.actions}>
+                <PrimaryAction
+                  label="Call"
+                  icon="phone"
+                  tone="soft"
+                  style={styles.action}
+                  onPress={() => showApkOnlyFeature("Panggilan")}
+                />
+                <PrimaryAction
+                  label="Lokasi"
+                  icon="crosshairs-gps"
+                  tone="soft"
+                  style={styles.action}
+                  onPress={() => handleLocationUpdate(dispatch.id)}
+                />
+                <PrimaryAction
+                  label={nextStatusLabel(dispatch.status)}
+                  icon="check-circle-outline"
+                  tone={dispatch.status === "arrived" ? "danger" : "secondary"}
+                  style={styles.action}
+                  onPress={() => handleStatusUpdate(dispatch)}
+                />
+              </View>
+            </Card>
+          ))
         )}
       </View>
     </ScreenShell>
