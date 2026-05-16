@@ -215,14 +215,17 @@ export function IconButton({
   icon,
   onPress,
   tone = "neutral",
+  disabled = false,
 }: {
   icon: IconName;
   onPress?: () => void;
   tone?: "neutral" | "primary" | "secondary" | "danger";
+  disabled?: boolean;
 }) {
   const { palette } = useAppTheme();
-  const color =
-    tone === "danger"
+  const color = disabled
+    ? palette.subtle
+    : tone === "danger"
       ? colors.danger
       : tone === "secondary"
         ? palette.secondary
@@ -232,11 +235,14 @@ export function IconButton({
 
   return (
     <Pressable
-      onPress={onPress ?? (() => showComingSoon("Aksi"))}
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress ?? (() => showComingSoon("Aksi"))}
+      accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.iconButton,
         { backgroundColor: palette.surface, borderColor: palette.border },
-        pressed && styles.pressed,
+        pressed && !disabled && styles.pressed,
+        disabled && styles.disabledControl,
       ]}
     >
       <MaterialCommunityIcons name={icon} size={22} color={color} />
@@ -250,19 +256,24 @@ export function PrimaryAction({
   onPress,
   tone = "primary",
   style,
+  disabled = false,
 }: {
   label: string;
   icon?: IconName;
   onPress: () => void;
   tone?: "primary" | "secondary" | "soft" | "danger";
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 }) {
   const { palette } = useAppTheme();
   const textColor = tone === "soft" ? colors.primary : colors.textInverse;
+  const resolvedTextColor = disabled ? palette.subtle : textColor;
 
   return (
     <Pressable
-      onPress={onPress}
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
+      accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.actionButton,
         tone === "primary" && { backgroundColor: colors.primary },
@@ -273,7 +284,8 @@ export function PrimaryAction({
           borderColor: palette.borderStrong,
         },
         tone === "danger" && { backgroundColor: colors.danger },
-        pressed && styles.pressed,
+        pressed && !disabled && styles.pressed,
+        disabled && styles.disabledControl,
         style,
       ]}
     >
@@ -281,13 +293,13 @@ export function PrimaryAction({
         <MaterialCommunityIcons
           name={icon}
           size={18}
-          color={textColor}
+          color={resolvedTextColor}
         />
       )}
       <Text
         style={[
           styles.actionText,
-          { color: textColor },
+          { color: resolvedTextColor },
         ]}
       >
         {label}
@@ -682,6 +694,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }],
+  },
+  disabledControl: {
+    opacity: 0.55,
   },
   actionButton: {
     minHeight: 48,

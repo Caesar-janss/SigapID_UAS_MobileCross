@@ -1,6 +1,6 @@
 import { Href, router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -8,6 +8,7 @@ import {
   useFamilyMembers,
 } from "@/hooks/useFamilyMembers";
 import { useEmergencyActions } from "@/hooks/useEmergencyReports";
+import { useAppNotification } from "@/components/app/AppNotification";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { emergencyTypeLabel } from "@/utils/format";
 import { EmergencyType, FamilyMemberWithProfile } from "@/types";
@@ -60,6 +61,7 @@ const emergencyTypes = [
 export default function ReporterDashboard() {
   const { profile } = useAuth();
   const { palette, mode } = useAppTheme();
+  const { showNotification } = useAppNotification();
   const { members, loading: familyLoading, error: familyError } = useFamilyMembers();
   const {
     reports: familyActiveReports,
@@ -69,6 +71,8 @@ export default function ReporterDashboard() {
   } = useFamilyActiveReports(members, profile?.id);
   const { createReport } = useEmergencyActions();
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const reportSubmittingRef = useRef(false);
   const name = profile?.full_name ?? "User";
   const visibleMembers = members.slice(0, 2);
   const pendingIncomingCount = members.filter(
@@ -89,6 +93,10 @@ export default function ReporterDashboard() {
     title = "Laporan Darurat",
     description?: string,
   ) => {
+    if (reportSubmittingRef.current) return;
+
+    reportSubmittingRef.current = true;
+    setReportSubmitting(true);
     setCategoryPickerOpen(false);
 
     try {
@@ -99,11 +107,19 @@ export default function ReporterDashboard() {
         priority: type === "sos" ? "critical" : "high",
       });
 
+      showNotification({
+        title: "Laporan terkirim",
+        message: `${emergencyTypeLabel(type)} sudah masuk ke operator terdekat.`,
+        tone: "success",
+      });
+
       router.push({
         pathname: "/reporter/tracking",
         params: { reportId: report.id },
       });
     } catch (error) {
+      reportSubmittingRef.current = false;
+      setReportSubmitting(false);
       Alert.alert(
         "Gagal membuat laporan",
         error instanceof Error ? error.message : "Terjadi kesalahan.",
@@ -255,6 +271,7 @@ export default function ReporterDashboard() {
           <IconButton
             icon="bell-alert-outline"
             tone="danger"
+            disabled={reportSubmitting}
             onPress={() =>
               handleCreateReport(
                 "sos",
@@ -269,6 +286,7 @@ export default function ReporterDashboard() {
           label="Lapor Keadaan Darurat"
           icon="alert-circle-outline"
           tone="danger"
+          disabled={reportSubmitting}
           onPress={() => setCategoryPickerOpen(true)}
         />
 
@@ -276,6 +294,7 @@ export default function ReporterDashboard() {
           {emergencyTypes.map((item) => (
             <Pressable
               key={item.title}
+              disabled={reportSubmitting}
               onPress={() =>
                 handleCreateReport(
                   item.type,
@@ -289,7 +308,8 @@ export default function ReporterDashboard() {
                   backgroundColor: mode === "dark" ? palette.cardSoft : item.background,
                   borderColor: `${item.color}55`,
                 },
-                pressed && styles.pressed,
+                pressed && !reportSubmitting && styles.pressed,
+                reportSubmitting && styles.disabledTile,
               ]}
             >
               <MaterialCommunityIcons
@@ -332,6 +352,7 @@ export default function ReporterDashboard() {
               {emergencyTypes.map((item) => (
                 <Pressable
                   key={item.title}
+                  disabled={reportSubmitting}
                   onPress={() =>
                     handleCreateReport(
                       item.type,
@@ -345,7 +366,8 @@ export default function ReporterDashboard() {
                       backgroundColor: palette.cardSoft,
                       borderColor: `${item.color}55`,
                     },
-                    pressed && styles.pressed,
+                    pressed && !reportSubmitting && styles.pressed,
+                    reportSubmitting && styles.disabledTile,
                   ]}
                 >
                   <MaterialCommunityIcons
@@ -364,6 +386,7 @@ export default function ReporterDashboard() {
                 </Pressable>
               ))}
               <Pressable
+                disabled={reportSubmitting}
                 onPress={() =>
                   handleCreateReport(
                     "sos",
@@ -377,7 +400,8 @@ export default function ReporterDashboard() {
                     backgroundColor: mode === "dark" ? palette.cardSoft : "#FFF7F7",
                     borderColor: "#FECACA",
                   },
-                  pressed && styles.pressed,
+                  pressed && !reportSubmitting && styles.pressed,
+                  reportSubmitting && styles.disabledTile,
                 ]}
               >
                 <MaterialCommunityIcons
@@ -400,6 +424,7 @@ export default function ReporterDashboard() {
             <PrimaryAction
               label="Batal"
               tone="soft"
+              disabled={reportSubmitting}
               onPress={() => setCategoryPickerOpen(false)}
             />
           </View>
@@ -523,6 +548,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }],
+  },
+  disabledTile: {
+    opacity: 0.55,
   },
   modalBackdrop: {
     flex: 1,

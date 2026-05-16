@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { AuthProvider } from '@/hooks/useAuth';
 import { AppThemeProvider, useAppTheme } from '@/hooks/useAppTheme';
+import { AppNotificationProvider } from '@/components/app/AppNotification';
 
 export default function RootLayout() {
   return (
@@ -19,13 +20,15 @@ function RootLayoutContent() {
   return (
     <ThemeProvider value={mode === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="auth/LoginScreen" options={{ title: 'Login' }} />
-          <Stack.Screen name="auth/RegisterScreen" options={{ title: 'Daftar' }} />
-          <Stack.Screen name="reporter" />
-          <Stack.Screen name="operator" />
-        </Stack>
+        <AppNotificationProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="auth/LoginScreen" options={{ title: 'Login' }} />
+            <Stack.Screen name="auth/RegisterScreen" options={{ title: 'Daftar' }} />
+            <Stack.Screen name="reporter" />
+            <Stack.Screen name="operator" />
+          </Stack>
+        </AppNotificationProvider>
       </AuthProvider>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>

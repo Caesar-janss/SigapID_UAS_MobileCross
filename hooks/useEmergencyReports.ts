@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import * as Location from "expo-location";
 import {
@@ -416,6 +416,7 @@ export function useEmergencyChat(reportId?: string) {
   const [loading, setLoading] = useState(!!reportId);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
 
   const loadMessages = useCallback(async (options?: { silent?: boolean }) => {
     if (!reportId) {
@@ -524,7 +525,9 @@ export function useEmergencyChat(reportId?: string) {
 
       const trimmedBody = body.trim();
       if (!trimmedBody && kind === "text") return;
+      if (sendingRef.current) return;
 
+      sendingRef.current = true;
       setSending(true);
 
       try {
@@ -549,6 +552,7 @@ export function useEmergencyChat(reportId?: string) {
           setMessages((current) => mergeMessages(current, data as Message));
         }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
@@ -558,7 +562,9 @@ export function useEmergencyChat(reportId?: string) {
   const sendVoiceNote = useCallback(
     async (uri: string, durationSeconds: number) => {
       if (!reportId || !profile?.id) return;
+      if (sendingRef.current) return;
 
+      sendingRef.current = true;
       setSending(true);
 
       try {
@@ -606,6 +612,7 @@ export function useEmergencyChat(reportId?: string) {
           setMessages((current) => mergeMessages(current, data as Message));
         }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },

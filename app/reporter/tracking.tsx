@@ -1,4 +1,5 @@
 import { Href, router, useLocalSearchParams } from "expo-router";
+import { useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import {
   useEmergencyActions,
@@ -27,6 +28,8 @@ import {
   navigateTo,
 } from "@/components/app/MockAppUI";
 
+type TrackingBusyAction = "chat" | "finish" | "location" | "sensor";
+
 export default function ReporterTracking() {
   const { palette, mode } = useAppTheme();
   const params = useLocalSearchParams<{ reportId?: string }>();
@@ -36,9 +39,27 @@ export default function ReporterTracking() {
   const { latestActiveDispatch } = useReportDispatches(targetReportId);
   const { finishReport, updateReportLocation } = useEmergencyActions();
   const active = report ?? activeReport;
+  const [busyAction, setBusyAction] = useState<TrackingBusyAction | null>(null);
+  const busyActionRef = useRef<TrackingBusyAction | null>(null);
+
+  const beginAction = (action: TrackingBusyAction) => {
+    if (busyActionRef.current) return false;
+
+    busyActionRef.current = action;
+    setBusyAction(action);
+    return true;
+  };
+
+  const endAction = (action: TrackingBusyAction) => {
+    if (busyActionRef.current !== action) return;
+
+    busyActionRef.current = null;
+    setBusyAction(null);
+  };
 
   const handleFinish = async () => {
     if (!active?.id) return;
+    if (!beginAction("finish")) return;
 
     try {
       await finishReport(active.id);
@@ -48,6 +69,7 @@ export default function ReporterTracking() {
         "Gagal menyelesaikan laporan",
         finishError instanceof Error ? finishError.message : "Terjadi kesalahan.",
       );
+      endAction("finish");
     }
   };
 
@@ -56,6 +78,8 @@ export default function ReporterTracking() {
       Alert.alert("Belum ada laporan aktif", "Buat laporan darurat terlebih dahulu.");
       return;
     }
+
+    if (!beginAction("chat")) return;
 
     router.push({
       pathname: "/reporter/chat",
@@ -70,6 +94,7 @@ export default function ReporterTracking() {
 
   const refreshLocation = async () => {
     if (!active?.id) return;
+    if (!beginAction("location")) return;
 
     try {
       await updateReportLocation(active.id);
@@ -80,7 +105,15 @@ export default function ReporterTracking() {
         "Gagal memperbarui lokasi",
         locationError instanceof Error ? locationError.message : "Terjadi kesalahan.",
       );
+    } finally {
+      endAction("location");
     }
+  };
+
+  const openSensorAlert = () => {
+    if (!beginAction("sensor")) return;
+
+    navigateTo("/reporter/emergency-alert" as Href);
   };
 
   if (loading || activeLoading) {
@@ -141,6 +174,7 @@ export default function ReporterTracking() {
         <IconButton
           icon="crosshairs-gps"
           tone="secondary"
+          disabled={!!busyAction}
           onPress={refreshLocation}
         />
       }
@@ -211,20 +245,23 @@ export default function ReporterTracking() {
             icon="phone"
             tone="secondary"
             style={styles.actionFlex}
+            disabled={!!busyAction}
             onPress={openCall}
           />
           <PrimaryAction
-            label="Pesan"
+            label={busyAction === "chat" ? "Membuka..." : "Pesan"}
             icon="message-outline"
             tone="soft"
             style={styles.actionFlex}
+            disabled={!!busyAction}
             onPress={openChat}
           />
           <PrimaryAction
-            label="Selesai"
+            label={busyAction === "finish" ? "Menyimpan..." : "Selesai"}
             icon="check-circle-outline"
             tone="danger"
             style={styles.actionFlex}
+            disabled={!!busyAction}
             onPress={handleFinish}
           />
         </View>
@@ -249,9 +286,10 @@ export default function ReporterTracking() {
             </Text>
           </View>
           <PrimaryAction
-            label="Coba"
+            label={busyAction === "sensor" ? "Membuka..." : "Coba"}
             tone="danger"
-            onPress={() => navigateTo("/reporter/emergency-alert" as Href)}
+            disabled={!!busyAction}
+            onPress={openSensorAlert}
           />
         </View>
       </Card>

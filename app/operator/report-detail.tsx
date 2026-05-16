@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useEmergencyReport } from "@/hooks/useEmergencyReports";
 import {
   useReportDispatches,
   useUnitDispatchActions,
 } from "@/hooks/useUnitDispatches";
+import { useAppNotification } from "@/components/app/AppNotification";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import {
   emergencyStatusLabel,
@@ -26,8 +28,11 @@ import {
   StatusPill,
 } from "@/components/app/MockAppUI";
 
+type BusyAction = "chat" | "dispatch" | "finish";
+
 export default function OperatorReportDetail() {
   const { palette } = useAppTheme();
+  const { showNotification } = useAppNotification();
   const params = useLocalSearchParams<{ reportId?: string }>();
   const { report, loading, error } = useEmergencyReport(params.reportId);
   const {
@@ -39,9 +44,27 @@ export default function OperatorReportDetail() {
   } = useReportDispatches(params.reportId);
   const { acceptReport, finishReport } = useEmergencyActions();
   const { dispatchUnit } = useUnitDispatchActions();
+  const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const busyActionRef = useRef<BusyAction | null>(null);
+
+  const beginAction = (action: BusyAction) => {
+    if (busyActionRef.current) return false;
+
+    busyActionRef.current = action;
+    setBusyAction(action);
+    return true;
+  };
+
+  const endAction = (action: BusyAction) => {
+    if (busyActionRef.current !== action) return;
+
+    busyActionRef.current = null;
+    setBusyAction(null);
+  };
 
   const handleFinish = async () => {
     if (!report?.id) return;
+    if (!beginAction("finish")) return;
 
     try {
       await finishReport(report.id);
@@ -51,11 +74,13 @@ export default function OperatorReportDetail() {
         "Gagal menyelesaikan laporan",
         finishError instanceof Error ? finishError.message : "Terjadi kesalahan.",
       );
+      endAction("finish");
     }
   };
 
   const handleOpenChat = async () => {
     if (!report?.id) return;
+    if (!beginAction("chat")) return;
 
     try {
       await acceptReport(report.id);
@@ -68,29 +93,36 @@ export default function OperatorReportDetail() {
         "Gagal membuka chat",
         acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
       );
+      endAction("chat");
     }
   };
 
   const sendHelp = async (unitType: UnitType) => {
     if (!report?.id) return;
+    if (!beginAction("dispatch")) return;
 
     try {
       await acceptReport(report.id);
       await dispatchUnit(report.id, unitType);
       await reloadDispatches({ silent: true });
-      Alert.alert(
-        "Bantuan dikirim",
-        `Laporan dikirim ke petugas ${unitTypeLabel(unitType)} yang sedang online.`,
-      );
+      showNotification({
+        title: "Bantuan dikirim",
+        message: `Petugas ${unitTypeLabel(unitType)} yang online sudah menerima tugas.`,
+        tone: "success",
+      });
     } catch (dispatchError) {
       Alert.alert(
         "Gagal mengirim bantuan",
         dispatchError instanceof Error ? dispatchError.message : "Terjadi kesalahan.",
       );
+    } finally {
+      endAction("dispatch");
     }
   };
 
   const handleDispatchHelp = () => {
+    if (busyActionRef.current) return;
+
     Alert.alert("Kirim Bantuan", "Pilih unit lapangan yang dibutuhkan.", [
       { text: "Ambulans", onPress: () => sendHelp("ambulance") },
       { text: "Polisi", onPress: () => sendHelp("police") },
@@ -226,10 +258,11 @@ export default function OperatorReportDetail() {
             </Text>
           </View>
           <PrimaryAction
-            label="Kirim"
+            label={busyAction === "dispatch" ? "Mengirim" : "Kirim"}
             icon="send-outline"
             tone="secondary"
             style={styles.dispatchButton}
+            disabled={!!busyAction}
             onPress={handleDispatchHelp}
           />
         </View>
@@ -283,20 +316,23 @@ export default function OperatorReportDetail() {
           icon="phone"
           tone="soft"
           style={styles.quickButton}
+          disabled={!!busyAction}
           onPress={() => showApkOnlyFeature("Panggilan")}
         />
         <PrimaryAction
-          label="Message"
+          label={busyAction === "chat" ? "Membuka..." : "Message"}
           icon="message-outline"
           tone="soft"
           style={styles.quickButton}
+          disabled={!!busyAction}
           onPress={handleOpenChat}
         />
         <PrimaryAction
-          label="Selesai"
+          label={busyAction === "finish" ? "Menyimpan..." : "Selesai"}
           icon="check-circle-outline"
           tone="secondary"
           style={styles.quickButton}
+          disabled={!!busyAction}
           onPress={handleFinish}
         />
       </View>

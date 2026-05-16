@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useEmergencyActions, useOperatorReports } from "@/hooks/useEmergencyReports";
 import { useAuth } from "@/hooks/useAuth";
@@ -67,8 +67,27 @@ function CentralOperatorDashboard() {
   const { palette } = useAppTheme();
   const { activeReports, loading, error } = useOperatorReports();
   const { acceptReport } = useEmergencyActions();
+  const [busyReportId, setBusyReportId] = useState<string | null>(null);
+  const busyReportIdRef = useRef<string | null>(null);
+
+  const beginReportAction = (reportId: string) => {
+    if (busyReportIdRef.current) return false;
+
+    busyReportIdRef.current = reportId;
+    setBusyReportId(reportId);
+    return true;
+  };
+
+  const endReportAction = (reportId: string) => {
+    if (busyReportIdRef.current !== reportId) return;
+
+    busyReportIdRef.current = null;
+    setBusyReportId(null);
+  };
 
   const handleAccept = async (reportId: string) => {
+    if (!beginReportAction(reportId)) return;
+
     try {
       await acceptReport(reportId);
       router.push({ pathname: "/operator/chat", params: { reportId } });
@@ -77,10 +96,13 @@ function CentralOperatorDashboard() {
         "Gagal menerima laporan",
         acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
       );
+      endReportAction(reportId);
     }
   };
 
   const handleOpenDetail = async (reportId: string, pending: boolean) => {
+    if (!beginReportAction(reportId)) return;
+
     try {
       if (pending) {
         await acceptReport(reportId);
@@ -95,6 +117,7 @@ function CentralOperatorDashboard() {
         "Gagal membuka detail",
         acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
       );
+      endReportAction(reportId);
     }
   };
 
@@ -159,20 +182,23 @@ function CentralOperatorDashboard() {
                 icon="phone"
                 tone="soft"
                 style={styles.action}
+                disabled={!!busyReportId}
                 onPress={() => showApkOnlyFeature("Panggilan")}
               />
               <PrimaryAction
-                label="Chat"
+                label={busyReportId === report.id ? "Membuka..." : "Chat"}
                 icon="message-outline"
                 tone="soft"
                 style={styles.action}
+                disabled={!!busyReportId}
                 onPress={() => handleAccept(report.id)}
               />
               <PrimaryAction
-                label="Detail"
+                label={busyReportId === report.id ? "Membuka..." : "Detail"}
                 icon={report.status === "pending" ? "check-circle-outline" : "file-search-outline"}
                 tone="secondary"
                 style={styles.action}
+                disabled={!!busyReportId}
                 onPress={() => handleOpenDetail(report.id, report.status === "pending")}
               />
             </View>
@@ -189,9 +215,26 @@ function UnitOperatorDashboard() {
   const { palette } = useAppTheme();
   const { activeDispatches, loading, error, reload } = useUnitOperatorDispatches();
   const { updateDispatchStatus, updateDispatchLocation } = useUnitDispatchActions();
+  const [busyDispatchId, setBusyDispatchId] = useState<string | null>(null);
+  const busyDispatchIdRef = useRef<string | null>(null);
   const movingDispatch = activeDispatches.find((dispatch) =>
     ["sent", "accepted", "on_route", "arrived"].includes(dispatch.status),
   );
+
+  const beginDispatchAction = (dispatchId: string) => {
+    if (busyDispatchIdRef.current) return false;
+
+    busyDispatchIdRef.current = dispatchId;
+    setBusyDispatchId(dispatchId);
+    return true;
+  };
+
+  const endDispatchAction = (dispatchId: string) => {
+    if (busyDispatchIdRef.current !== dispatchId) return;
+
+    busyDispatchIdRef.current = null;
+    setBusyDispatchId(null);
+  };
 
   useEffect(() => {
     if (!movingDispatch?.id) return;
@@ -207,6 +250,7 @@ function UnitOperatorDashboard() {
   const handleStatusUpdate = async (dispatch: UnitDispatch) => {
     const status = nextStatus(dispatch);
     if (!status) return;
+    if (!beginDispatchAction(dispatch.id)) return;
 
     try {
       await updateDispatchStatus(dispatch.id, status);
@@ -221,10 +265,14 @@ function UnitOperatorDashboard() {
         "Gagal update tugas",
         statusError instanceof Error ? statusError.message : "Terjadi kesalahan.",
       );
+    } finally {
+      endDispatchAction(dispatch.id);
     }
   };
 
   const handleLocationUpdate = async (dispatchId: string) => {
+    if (!beginDispatchAction(dispatchId)) return;
+
     try {
       await updateDispatchLocation(dispatchId);
       await reload({ silent: true });
@@ -234,6 +282,8 @@ function UnitOperatorDashboard() {
         "Gagal update lokasi",
         locationError instanceof Error ? locationError.message : "Terjadi kesalahan.",
       );
+    } finally {
+      endDispatchAction(dispatchId);
     }
   };
 
@@ -330,20 +380,27 @@ function UnitOperatorDashboard() {
                   icon="phone"
                   tone="soft"
                   style={styles.action}
+                  disabled={!!busyDispatchId}
                   onPress={() => showApkOnlyFeature("Panggilan")}
                 />
                 <PrimaryAction
-                  label="Lokasi"
+                  label={busyDispatchId === dispatch.id ? "Mengirim..." : "Lokasi"}
                   icon="crosshairs-gps"
                   tone="soft"
                   style={styles.action}
+                  disabled={!!busyDispatchId}
                   onPress={() => handleLocationUpdate(dispatch.id)}
                 />
                 <PrimaryAction
-                  label={nextStatusLabel(dispatch.status)}
+                  label={
+                    busyDispatchId === dispatch.id
+                      ? "Menyimpan..."
+                      : nextStatusLabel(dispatch.status)
+                  }
                   icon="check-circle-outline"
                   tone={dispatch.status === "arrived" ? "danger" : "secondary"}
                   style={styles.action}
+                  disabled={!!busyDispatchId}
                   onPress={() => handleStatusUpdate(dispatch)}
                 />
               </View>

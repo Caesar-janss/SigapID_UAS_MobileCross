@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, StyleSheet, Text } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,7 @@ export default function ReporterAddFamily() {
   const { palette, mode } = useAppTheme();
   const [familyId, setFamilyId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleSubmit = async () => {
     const normalizedCode = familyId.trim().toUpperCase();
@@ -31,6 +32,9 @@ export default function ReporterAddFamily() {
       return;
     }
 
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
     setSubmitting(true);
 
     const { data: foundProfiles, error: findError } = await supabase.rpc(
@@ -39,6 +43,7 @@ export default function ReporterAddFamily() {
     );
 
     if (findError) {
+      submittingRef.current = false;
       setSubmitting(false);
       Alert.alert("Gagal mencari akun", findError.message);
       return;
@@ -47,12 +52,14 @@ export default function ReporterAddFamily() {
     const targetProfile = foundProfiles?.[0];
 
     if (!targetProfile) {
+      submittingRef.current = false;
       setSubmitting(false);
       Alert.alert("Akun tidak ditemukan", "Cek lagi ID akun keluarga.");
       return;
     }
 
     if (targetProfile.id === profile.id) {
+      submittingRef.current = false;
       setSubmitting(false);
       Alert.alert("Tidak bisa", "Kamu tidak bisa menambahkan akun sendiri.");
       return;
@@ -65,6 +72,7 @@ export default function ReporterAddFamily() {
       status: "pending",
     });
 
+    submittingRef.current = false;
     setSubmitting(false);
 
     if (insertError) {
@@ -118,6 +126,7 @@ export default function ReporterAddFamily() {
         label={submitting ? "Mengirim..." : "Kirim Permintaan"}
         icon="send-outline"
         tone="secondary"
+        disabled={submitting}
         onPress={handleSubmit}
       />
     </ScreenShell>
