@@ -15,7 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Href, router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polyline } from "react-native-maps";
 import { colors, radius, shadow, spacing, typography } from "@/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 
@@ -459,6 +459,13 @@ export function MiniMap({
             longitudeDelta: 0.012,
           }
         : null;
+  const routeCoordinates =
+    hasLocation && hasOperatorLocation
+      ? [
+          { latitude: operatorLatitude, longitude: operatorLongitude },
+          { latitude, longitude },
+        ]
+      : [];
 
   if (nativeMapEnabled) {
     return (
@@ -472,6 +479,15 @@ export function MiniMap({
           pitchEnabled={false}
           rotateEnabled={false}
         >
+          {routeCoordinates.length > 0 && (
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeColor={colors.secondary}
+              strokeWidth={5}
+              lineDashPattern={[1]}
+              lineCap="round"
+            />
+          )}
           <Marker
             coordinate={{ latitude, longitude }}
             title="Lokasi pelapor"
@@ -497,6 +513,9 @@ export function MiniMap({
       <View style={[styles.road, styles.roadA]} />
       <View style={[styles.road, styles.roadB]} />
       <View style={[styles.road, styles.roadC]} />
+      {hasLocation && hasOperatorLocation && (
+        <View style={styles.routeLineFallback} />
+      )}
       <View style={[styles.mapPin, styles.mapPinUser]}>
         <MaterialCommunityIcons name="account" size={15} color={colors.textInverse} />
       </View>
@@ -817,6 +836,17 @@ const styles = StyleSheet.create({
     left: 90,
     backgroundColor: "rgba(96, 165, 250, 0.18)",
     transform: [{ rotate: "98deg" }],
+  },
+  routeLineFallback: {
+    position: "absolute",
+    width: "36%",
+    height: 5,
+    left: "42%",
+    top: "45%",
+    borderRadius: 999,
+    backgroundColor: colors.secondary,
+    opacity: 0.75,
+    transform: [{ rotate: "-28deg" }],
   },
   mapPin: {
     position: "absolute",
