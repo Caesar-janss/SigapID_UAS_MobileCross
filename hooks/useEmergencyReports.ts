@@ -24,6 +24,9 @@ const activeStatuses: EmergencyStatus[] = [
 const chatPollingMs = 1500;
 const historyLimit = 15;
 const voiceNoteBucket = "report-voice-notes";
+const locationTimeoutMs = 6500;
+const lastKnownLocationMaxAgeMs = 60_000;
+const lastKnownLocationRequiredAccuracy = 300;
 
 type ReportInsert = {
   type: EmergencyType;
@@ -47,15 +50,38 @@ async function getCurrentLocation() {
     return null;
   }
 
-  const position = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.Balanced,
-  });
+  const lastKnownPosition = await Location.getLastKnownPositionAsync({
+    maxAge: lastKnownLocationMaxAgeMs,
+    requiredAccuracy: lastKnownLocationRequiredAccuracy,
+  }).catch(() => null);
+
+  const position =
+    lastKnownPosition ??
+    (await withTimeout(
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      }),
+      locationTimeoutMs,
+    ).catch(() => null));
+
+  if (!position) {
+    return null;
+  }
 
   return {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
     accuracy: position.coords.accuracy,
   };
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), timeoutMs);
+    }),
+  ]) as Promise<T | null>;
 }
 
 function reportSelect() {
@@ -195,14 +221,16 @@ export function useReporterReports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadReports = useCallback(async () => {
+  const loadReports = useCallback(async (options?: { silent?: boolean }) => {
     if (!profile?.id) {
       setReports([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setError(null);
 
     const { data, error: queryError } = await supabase
@@ -212,7 +240,9 @@ export function useReporterReports() {
       .order("created_at", { ascending: false });
 
     if (queryError) {
-      setReports([]);
+      if (!options?.silent) {
+        setReports([]);
+      }
       setError(queryError.message);
       setLoading(false);
       return;
@@ -241,7 +271,7 @@ export function useReporterReports() {
           table: "emergency_reports",
           filter: `reporter_id=eq.${profile.id}`,
         },
-        () => loadReports(),
+        () => loadReports({ silent: true }),
       )
       .subscribe();
 
@@ -272,14 +302,16 @@ export function useOperatorReports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadReports = useCallback(async () => {
+  const loadReports = useCallback(async (options?: { silent?: boolean }) => {
     if (!profile?.id) {
       setReports([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setError(null);
 
     const { data, error: queryError } = await supabase
@@ -288,7 +320,9 @@ export function useOperatorReports() {
       .order("created_at", { ascending: false });
 
     if (queryError) {
-      setReports([]);
+      if (!options?.silent) {
+        setReports([]);
+      }
       setError(queryError.message);
       setLoading(false);
       return;
@@ -312,12 +346,31 @@ export function useOperatorReports() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "emergency_reports" },
-        () => loadReports(),
+        () => loadReports({ silent: true }),
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+    };
+  }, [loadReports, profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const interval = setInterval(() => {
+      loadReports({ silent: true });
+    }, 5000);
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        loadReports({ silent: true });
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
     };
   }, [loadReports, profile?.id]);
 

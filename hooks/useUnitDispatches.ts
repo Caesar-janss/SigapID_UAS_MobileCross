@@ -18,6 +18,8 @@ const activeDispatchStatuses: UnitDispatchStatus[] = [
 
 const historyLimit = 15;
 const refreshMs = 2500;
+const cachedLocationMaxAgeMs = 30_000;
+const cachedLocationRequiredAccuracy = 150;
 
 function realtimeTopic(name: string) {
   return `${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -114,8 +116,22 @@ async function getCurrentLocation() {
     throw new Error("Izin lokasi belum diberikan.");
   }
 
+  const lastKnownPosition = await Location.getLastKnownPositionAsync({
+    maxAge: cachedLocationMaxAgeMs,
+    requiredAccuracy: cachedLocationRequiredAccuracy,
+  });
+
+  if (lastKnownPosition) {
+    return {
+      latitude: lastKnownPosition.coords.latitude,
+      longitude: lastKnownPosition.coords.longitude,
+      accuracy: lastKnownPosition.coords.accuracy,
+    };
+  }
+
   const position = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.Balanced,
+    mayShowUserSettingsDialog: false,
   });
 
   return {

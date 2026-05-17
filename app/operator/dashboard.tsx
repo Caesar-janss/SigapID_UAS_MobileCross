@@ -7,6 +7,9 @@ import {
   useUnitOperatorDispatches,
   useUnitDispatchActions,
 } from "@/hooks/useUnitDispatches";
+import { useCallInvitationActions } from "@/hooks/useCallInvitations";
+import { useOperatorReportNotifications } from "@/hooks/useOperatorReportNotifications";
+import { useAppNotification } from "@/components/app/AppNotification";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import {
   emergencyStatusLabel,
@@ -15,7 +18,6 @@ import {
   unitDispatchStatusLabel,
   unitTypeLabel,
 } from "@/utils/format";
-import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import { UnitDispatch, UnitDispatchStatus } from "@/types";
 import {
@@ -28,7 +30,7 @@ import {
   StatusPill,
 } from "@/components/app/MockAppUI";
 
-const locationHeartbeatMs = 12_000;
+const locationHeartbeatMs = 30_000;
 
 function nextStatus(dispatch: UnitDispatch): UnitDispatchStatus | null {
   if (dispatch.status === "sent") return "accepted";
@@ -44,6 +46,14 @@ function nextStatusLabel(status: UnitDispatchStatus) {
   if (status === "on_route") return "Tiba";
   if (status === "arrived") return "Selesai";
   return "Update";
+}
+
+function nextStatusDoneMessage(status: UnitDispatchStatus) {
+  if (status === "accepted") return "Tugas diterima. Lokasi dikirim otomatis.";
+  if (status === "on_route") return "Status berangkat tersimpan. Lokasi tetap diperbarui otomatis.";
+  if (status === "arrived") return "Status tiba tersimpan.";
+  if (status === "completed") return "Tugas selesai dan masuk histori.";
+  return "Status tugas berhasil diperbarui.";
 }
 
 function dispatchTone(status: UnitDispatchStatus) {
@@ -65,10 +75,14 @@ export default function OperatorDashboard() {
 
 function CentralOperatorDashboard() {
   const { palette } = useAppTheme();
-  const { activeReports, loading, error } = useOperatorReports();
+  const { showNotification } = useAppNotification();
+  const { activeReports, loading, error, reload } = useOperatorReports();
   const { acceptReport } = useEmergencyActions();
+  const { inviteCall } = useCallInvitationActions();
   const [busyReportId, setBusyReportId] = useState<string | null>(null);
   const busyReportIdRef = useRef<string | null>(null);
+
+  useOperatorReportNotifications(() => reload({ silent: true }));
 
   const beginReportAction = (reportId: string) => {
     if (busyReportIdRef.current) return false;
@@ -115,6 +129,37 @@ function CentralOperatorDashboard() {
     } catch (acceptError) {
       Alert.alert(
         "Gagal membuka detail",
+        acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
+      );
+      endReportAction(reportId);
+    }
+  };
+
+  const handleOpenCall = async (
+    reportId: string,
+    pending: boolean,
+    roomName?: string | null,
+  ) => {
+    if (!beginReportAction(reportId)) return;
+
+    try {
+      if (pending) {
+        await acceptReport(reportId);
+      }
+
+      await inviteCall(reportId, roomName ?? `sigapid-${reportId}`);
+      showNotification({
+        title: "Panggilan dikirim",
+        message: "Menunggu pihak lain menerima panggilan.",
+        tone: "info",
+      });
+      router.push({
+        pathname: "/operator/call",
+        params: { reportId },
+      });
+    } catch (acceptError) {
+      Alert.alert(
+        "Gagal membuka panggilan",
         acceptError instanceof Error ? acceptError.message : "Terjadi kesalahan.",
       );
       endReportAction(reportId);
@@ -183,7 +228,13 @@ function CentralOperatorDashboard() {
                 tone="soft"
                 style={styles.action}
                 disabled={!!busyReportId}
-                onPress={() => showApkOnlyFeature("Panggilan")}
+                onPress={() =>
+                  handleOpenCall(
+                    report.id,
+                    report.status === "pending",
+                    report.call_room,
+                  )
+                }
               />
               <PrimaryAction
                 label={busyReportId === report.id ? "Membuka..." : "Chat"}
@@ -213,6 +264,8 @@ function CentralOperatorDashboard() {
 function UnitOperatorDashboard() {
   const { profile } = useAuth();
   const { palette } = useAppTheme();
+  const { showNotification } = useAppNotification();
+  const { inviteCall } = useCallInvitationActions();
   const { activeDispatches, loading, error, reload } = useUnitOperatorDispatches();
   const { updateDispatchStatus, updateDispatchLocation } = useUnitDispatchActions();
   const [busyDispatchId, setBusyDispatchId] = useState<string | null>(null);
@@ -254,12 +307,19 @@ function UnitOperatorDashboard() {
 
     try {
       await updateDispatchStatus(dispatch.id, status);
+      await reload({ silent: true });
+      showNotification({
+        title: "Status diperbarui",
+        message: nextStatusDoneMessage(status),
+        tone: "success",
+        durationMs: 2200,
+      });
 
       if (status !== "completed") {
-        await updateDispatchLocation(dispatch.id);
+        updateDispatchLocation(dispatch.id)
+          .then(() => reload({ silent: true }))
+          .catch(() => undefined);
       }
-
-      await reload({ silent: true });
     } catch (statusError) {
       Alert.alert(
         "Gagal update tugas",
@@ -276,7 +336,11 @@ function UnitOperatorDashboard() {
     try {
       await updateDispatchLocation(dispatchId);
       await reload({ silent: true });
-      Alert.alert("Lokasi diperbarui", "Lokasi unit sudah dikirim ke operator pusat.");
+      showNotification({
+        title: "Lokasi diperbarui",
+        message: "Lokasi unit sudah dikirim ke operator pusat.",
+        tone: "success",
+      });
     } catch (locationError) {
       Alert.alert(
         "Gagal update lokasi",
@@ -380,8 +444,35 @@ function UnitOperatorDashboard() {
                   icon="phone"
                   tone="soft"
                   style={styles.action}
-                  disabled={!!busyDispatchId}
-                  onPress={() => showApkOnlyFeature("Panggilan")}
+                disabled={!!busyDispatchId}
+                  onPress={async () => {
+                    if (!dispatch.report?.id) return;
+
+                    try {
+                      await inviteCall(
+                        dispatch.report.id,
+                        dispatch.report.call_room ?? `sigapid-${dispatch.report.id}`,
+                      );
+                      showNotification({
+                        title: "Panggilan dikirim",
+                        message: "Menunggu pihak lain menerima panggilan.",
+                        tone: "info",
+                      });
+                    } catch (callError) {
+                      Alert.alert(
+                        "Gagal memulai panggilan",
+                        callError instanceof Error
+                          ? callError.message
+                          : "Terjadi kesalahan.",
+                      );
+                      return;
+                    }
+
+                    router.push({
+                      pathname: "/operator/call",
+                      params: { reportId: dispatch.report.id },
+                    });
+                  }}
                 />
                 <PrimaryAction
                   label={busyDispatchId === dispatch.id ? "Mengirim..." : "Lokasi"}

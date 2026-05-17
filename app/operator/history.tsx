@@ -38,7 +38,7 @@ function CentralOperatorHistory() {
       activeTab="history"
       title="Laporan Selesai"
       subtitle="15 riwayat terbaru yang sudah diselesaikan operator."
-      action={<IconButton icon="bell-outline" tone="secondary" />}
+      action={<IconButton icon="clock-outline" tone="secondary" disabled />}
     >
       <View style={styles.list}>
         {loading ? (
@@ -92,7 +92,7 @@ function UnitOperatorHistory() {
       activeTab="history"
       title="Riwayat Tugas"
       subtitle="15 tugas terbaru yang sudah selesai atau dibatalkan."
-      action={<IconButton icon="bell-outline" tone="secondary" />}
+      action={<IconButton icon="clock-outline" tone="secondary" disabled />}
     >
       <View style={styles.list}>
         {loading ? (

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -16,11 +15,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppNotification } from "@/components/app/AppNotification";
 import { colors, radius, spacing, typography } from "@/theme";
 import { UnitType, UserRole } from "@/types";
 
 export default function RegisterScreen() {
   const { signUp, loading } = useAuth();
+  const { showNotification } = useAppNotification();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,16 +60,18 @@ export default function RegisterScreen() {
         role,
         role === "dispatcher" ? unitType : null,
       );
-      Alert.alert(
-        "Pendaftaran berhasil",
-        "Silakan masuk dengan akun yang baru dibuat.",
-        [{ text: "OK", onPress: () => router.replace("/auth/LoginScreen") }],
-      );
+      showNotification({
+        title: "Pendaftaran berhasil",
+        message: "Silakan masuk dengan akun yang baru dibuat.",
+        tone: "success",
+      });
+      router.replace("/auth/LoginScreen");
     } catch (e) {
-      Alert.alert(
-        "Pendaftaran gagal",
-        e instanceof Error ? e.message : "Terjadi kesalahan",
-      );
+      showNotification({
+        title: "Pendaftaran gagal",
+        message: e instanceof Error ? e.message : "Terjadi kesalahan",
+        tone: "danger",
+      });
     }
   };
 
@@ -220,7 +223,12 @@ const RoleCard = ({
         color={selected ? colors.textInverse : colors.text}
       />
     </View>
-    <Text style={[typography.bodyStrong, { color: selected ? colors.primary : colors.text }]}>
+    <Text
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.78}
+      style={[typography.bodyStrong, styles.roleTitle, { color: selected ? colors.primary : colors.text }]}
+    >
       {title}
     </Text>
     <Text style={styles.roleDesc}>{description}</Text>
@@ -276,6 +284,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
     marginTop: 2,
+  },
+  roleTitle: {
+    maxWidth: "100%",
+    textAlign: "center",
   },
   roleError: {
     ...typography.caption,

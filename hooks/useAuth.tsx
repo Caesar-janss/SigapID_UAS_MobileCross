@@ -217,11 +217,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
 
+      if (_event === "INITIAL_SESSION") {
+        return;
+      }
+
       setState((current) => ({
         ...current,
         session,
         profile: session ? current.profile : null,
-        initializing: false,
+        initializing: session ? current.initializing : false,
       }));
     });
 

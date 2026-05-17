@@ -20,7 +20,7 @@ export default function ReporterHistory() {
       activeTab="history"
       title="Laporan Selesai"
       subtitle="15 riwayat terbaru yang sudah ditangani."
-      action={<IconButton icon="bell-outline" tone="secondary" />}
+      action={<IconButton icon="clock-outline" tone="secondary" disabled />}
     >
       <View style={styles.list}>
         {loading ? (

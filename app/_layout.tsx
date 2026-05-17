@@ -5,6 +5,8 @@ import 'react-native-reanimated';
 import { AuthProvider } from '@/hooks/useAuth';
 import { AppThemeProvider, useAppTheme } from '@/hooks/useAppTheme';
 import { AppNotificationProvider } from '@/components/app/AppNotification';
+import { IncomingCallListener } from '@/hooks/useCallInvitations';
+import { useShakeAlertNotificationResponses } from '@/hooks/useShakeAlertNotificationResponses';
 
 export default function RootLayout() {
   return (
@@ -16,6 +18,7 @@ export default function RootLayout() {
 
 function RootLayoutContent() {
   const { mode } = useAppTheme();
+  useShakeAlertNotificationResponses();
 
   return (
     <ThemeProvider value={mode === 'dark' ? DarkTheme : DefaultTheme}>
@@ -28,6 +31,7 @@ function RootLayoutContent() {
             <Stack.Screen name="reporter" />
             <Stack.Screen name="operator" />
           </Stack>
+          <IncomingCallListener />
         </AppNotificationProvider>
       </AuthProvider>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />

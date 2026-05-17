@@ -297,6 +297,9 @@ export function PrimaryAction({
         />
       )}
       <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
         style={[
           styles.actionText,
           { color: resolvedTextColor },
@@ -436,6 +439,10 @@ export function MiniMap({
     typeof latitude === "number" && typeof longitude === "number";
   const hasOperatorLocation =
     typeof operatorLatitude === "number" && typeof operatorLongitude === "number";
+  const nativeMapEnabled =
+    Platform.OS !== "web" &&
+    hasLocation &&
+    (Platform.OS !== "android" || !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
   const mapRegion =
     hasLocation && hasOperatorLocation
       ? {
@@ -453,7 +460,7 @@ export function MiniMap({
           }
         : null;
 
-  if (hasLocation && Platform.OS !== "web") {
+  if (nativeMapEnabled) {
     return (
       <View style={[styles.map, { height }]}>
         <MapView
@@ -498,6 +505,18 @@ export function MiniMap({
       </View>
       <View style={[styles.mapPin, styles.mapPinAlert]}>
         <MaterialCommunityIcons name="map-marker" size={16} color={colors.textInverse} />
+      </View>
+      <View style={styles.mapStatus}>
+        <Text style={styles.mapStatusLine}>
+          {hasLocation
+            ? `Pelapor ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+            : "Menunggu GPS pelapor"}
+        </Text>
+        <Text style={styles.mapStatusLine}>
+          {hasOperatorLocation
+            ? `Unit ${operatorLatitude.toFixed(5)}, ${operatorLongitude.toFixed(5)}`
+            : "Lokasi unit belum aktif"}
+        </Text>
       </View>
     </View>
   );
@@ -722,6 +741,8 @@ const styles = StyleSheet.create({
   actionText: {
     ...typography.button,
     color: colors.textInverse,
+    flexShrink: 1,
+    textAlign: "center",
   },
   actionTextSoft: {
     color: colors.primary,
@@ -820,6 +841,22 @@ const styles = StyleSheet.create({
     left: "68%",
     top: "22%",
     backgroundColor: colors.danger,
+  },
+  mapStatus: {
+    position: "absolute",
+    left: spacing.sm,
+    right: spacing.sm,
+    bottom: spacing.sm,
+    gap: 3,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255, 255, 255, 0.86)",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 7,
+  },
+  mapStatusLine: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.text,
   },
   infoGrid: {
     flexDirection: "row",

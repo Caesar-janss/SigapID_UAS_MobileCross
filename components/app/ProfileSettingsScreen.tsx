@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import {
-  Alert,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -13,6 +14,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Href, router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfileAvatar } from "@/hooks/useProfileAvatar";
+import { useShakeDetectionSettings } from "@/hooks/useShakeDetectionSettings";
+import { useAppNotification } from "@/components/app/AppNotification";
 import { AppPalette, useAppTheme } from "@/hooks/useAppTheme";
 import { supabase } from "@/utils/supabase";
 import { colors, radius, shadow, spacing, typography } from "@/theme";
@@ -55,8 +58,15 @@ export function ProfileSettingsScreen({
     profile?.unit_type ?? null,
   );
   const [showPassword, setShowPassword] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const { mode, palette, setMode } = useAppTheme();
+  const { showNotification } = useAppNotification();
   const { uploading, updateAvatar } = useProfileAvatar();
+  const {
+    enabled: shakeDetectionEnabled,
+    loading: shakeDetectionLoading,
+    setEnabled: setShakeDetectionEnabled,
+  } = useShakeDetectionSettings();
   const activeTab = "profile" as const;
   const isDark = mode === "dark";
   const visibleName = name.trim() || profile?.full_name || displayFallback;
@@ -65,6 +75,7 @@ export function ProfileSettingsScreen({
   const screenRole = role === "operator" ? "operator" : "reporter";
   const signInRoute = "/auth/LoginScreen" as Href;
   const isOperator = profile?.role === "dispatcher" || role === "operator";
+  const isReporter = profile?.role === "reporter" || role === "reporter";
   const unitLabel =
     unitOptions.find((option) => option.value === unitType)?.label ?? "Operator Pusat";
 
@@ -104,13 +115,21 @@ export function ProfileSettingsScreen({
       await signOut();
       router.replace(signInRoute);
     } catch (e) {
-      Alert.alert("Gagal keluar", e instanceof Error ? e.message : "Terjadi kesalahan");
+      showNotification({
+        title: "Gagal keluar",
+        message: e instanceof Error ? e.message : "Terjadi kesalahan",
+        tone: "danger",
+      });
     }
   };
 
   const handleUpdateProfile = async () => {
     if (!profile?.id) {
-      Alert.alert("Belum siap", "Profil belum terbaca. Coba login ulang.");
+      showNotification({
+        title: "Belum siap",
+        message: "Profil belum terbaca. Coba login ulang.",
+        tone: "warning",
+      });
       return;
     }
 
@@ -133,12 +152,17 @@ export function ProfileSettingsScreen({
       if (profileError) throw new Error(profileError.message);
 
       await refreshProfile();
-      Alert.alert("Tersimpan", savedMessage);
+      showNotification({
+        title: "Profil diperbarui",
+        message: savedMessage,
+        tone: "success",
+      });
     } catch (error) {
-      Alert.alert(
-        "Gagal update profile",
-        error instanceof Error ? error.message : "Terjadi kesalahan.",
-      );
+      showNotification({
+        title: "Gagal update profil",
+        message: error instanceof Error ? error.message : "Terjadi kesalahan.",
+        tone: "danger",
+      });
     }
   };
 
@@ -163,12 +187,18 @@ export function ProfileSettingsScreen({
       if (profileError) throw new Error(profileError.message);
 
       await refreshProfile();
+      showNotification({
+        title: "Mode diperbarui",
+        message: `Sekarang aktif sebagai ${unitOptions.find((option) => option.value === nextUnitType)?.label ?? "Operator Pusat"}.`,
+        tone: "success",
+      });
     } catch (error) {
       setUnitType(previousUnitType);
-      Alert.alert(
-        "Gagal mengganti mode",
-        error instanceof Error ? error.message : "Terjadi kesalahan.",
-      );
+      showNotification({
+        title: "Gagal mengganti mode",
+        message: error instanceof Error ? error.message : "Terjadi kesalahan.",
+        tone: "danger",
+      });
     }
   };
 
@@ -176,7 +206,11 @@ export function ProfileSettingsScreen({
     const nextPassword = password.trim();
 
     if (nextPassword.length < 6) {
-      Alert.alert("Password belum valid", "Password baru minimal 6 karakter.");
+      showNotification({
+        title: "Password belum valid",
+        message: "Password baru minimal 6 karakter.",
+        tone: "warning",
+      });
       return;
     }
 
@@ -189,36 +223,64 @@ export function ProfileSettingsScreen({
 
       setPassword("");
       setShowPassword(false);
-      Alert.alert("Password tersimpan", "Password berhasil diperbarui.");
+      showNotification({
+        title: "Password tersimpan",
+        message: "Password berhasil diperbarui.",
+        tone: "success",
+      });
     } catch (error) {
-      Alert.alert(
-        "Gagal ubah password",
-        error instanceof Error ? error.message : "Terjadi kesalahan.",
-      );
+      showNotification({
+        title: "Gagal ubah password",
+        message: error instanceof Error ? error.message : "Terjadi kesalahan.",
+        tone: "danger",
+      });
+    }
+  };
+
+  const handleToggleShakeDetection = async (enabled: boolean) => {
+    try {
+      await setShakeDetectionEnabled(enabled);
+      showNotification({
+        title: enabled ? "Deteksi guncangan aktif" : "Deteksi guncangan mati",
+        message: enabled
+          ? "SigapID akan memantau benturan kuat di perangkat ini."
+          : "Peringatan guncangan dimatikan di perangkat ini.",
+        tone: enabled ? "success" : "info",
+      });
+    } catch (error) {
+      showNotification({
+        title: "Gagal menyimpan pengaturan",
+        message: error instanceof Error ? error.message : "Terjadi kesalahan.",
+        tone: "danger",
+      });
     }
   };
 
   const handleUpdateAvatar = async (source: "camera" | "library") => {
     try {
+      setAvatarPickerOpen(false);
       const avatarUrl = await updateAvatar(source);
 
       if (avatarUrl) {
-        Alert.alert("Foto tersimpan", "Foto profil berhasil diperbarui.");
+        showNotification({
+          title: "Foto tersimpan",
+          message: "Foto profil berhasil diperbarui.",
+          tone: "success",
+        });
       }
     } catch (error) {
-      Alert.alert(
-        "Gagal update foto",
-        error instanceof Error ? error.message : "Terjadi kesalahan.",
-      );
+      showNotification({
+        title: "Gagal update foto",
+        message: error instanceof Error ? error.message : "Terjadi kesalahan.",
+        tone: "danger",
+      });
     }
   };
 
   const handleAvatarPress = () => {
-    Alert.alert("Foto Profil", "Pilih sumber foto profil.", [
-      { text: "Kamera", onPress: () => handleUpdateAvatar("camera") },
-      { text: "Galeri", onPress: () => handleUpdateAvatar("library") },
-      { text: "Batal", style: "cancel" },
-    ]);
+    if (uploading) return;
+
+    setAvatarPickerOpen(true);
   };
 
   return (
@@ -288,6 +350,14 @@ export function ProfileSettingsScreen({
           placeholder={addressFallback}
           palette={palette}
         />
+        {isReporter && (
+          <ShakeDetectionRow
+            enabled={shakeDetectionEnabled}
+            loading={shakeDetectionLoading}
+            palette={palette}
+            onChange={handleToggleShakeDetection}
+          />
+        )}
         {isOperator && (
           <UnitTypeSelector
             value={unitType}
@@ -342,7 +412,126 @@ export function ProfileSettingsScreen({
           <Text style={styles.signOutText}>Keluar</Text>
         </Pressable>
       </View>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={avatarPickerOpen}
+        onRequestClose={() => setAvatarPickerOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.sourceSheet,
+              { backgroundColor: palette.card, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.sheetTitle, { color: palette.text }]}>
+              Foto Profil
+            </Text>
+            <Text style={[styles.sheetCaption, { color: palette.muted }]}>
+              Pilih sumber foto yang ingin dipakai.
+            </Text>
+            <View style={styles.sourceOptions}>
+              <SourceOption
+                icon="camera-outline"
+                label="Kamera"
+                caption="Ambil foto baru"
+                palette={palette}
+                onPress={() => handleUpdateAvatar("camera")}
+              />
+              <SourceOption
+                icon="image-outline"
+                label="Galeri"
+                caption="Pilih dari library"
+                palette={palette}
+                onPress={() => handleUpdateAvatar("library")}
+              />
+            </View>
+            <PrimaryAction
+              label="Batal"
+              tone="soft"
+              onPress={() => setAvatarPickerOpen(false)}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenShell>
+  );
+}
+
+function SourceOption({
+  icon,
+  label,
+  caption,
+  palette,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  label: string;
+  caption: string;
+  palette: AppPalette;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.sourceOption,
+        { backgroundColor: palette.cardSoft, borderColor: palette.border },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.sourceIcon, { backgroundColor: palette.secondarySoft }]}>
+        <MaterialCommunityIcons name={icon} size={22} color={palette.secondary} />
+      </View>
+      <View style={styles.sourceText}>
+        <Text style={[styles.sourceTitle, { color: palette.text }]}>{label}</Text>
+        <Text style={[styles.sourceCaption, { color: palette.muted }]}>
+          {caption}
+        </Text>
+      </View>
+      <MaterialCommunityIcons name="chevron-right" size={20} color={palette.subtle} />
+    </Pressable>
+  );
+}
+
+function ShakeDetectionRow({
+  enabled,
+  loading,
+  palette,
+  onChange,
+}: {
+  enabled: boolean;
+  loading: boolean;
+  palette: AppPalette;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <View style={[styles.settingRow, { borderBottomColor: palette.rowBorder }]}>
+      <View style={[styles.settingIcon, { backgroundColor: palette.primarySoft }]}>
+        <MaterialCommunityIcons
+          name="motion-sensor"
+          size={22}
+          color={colors.primary}
+        />
+      </View>
+      <View style={styles.settingText}>
+        <Text style={[styles.settingTitle, { color: palette.text }]}>
+          Deteksi Guncangan
+        </Text>
+        <Text style={[styles.settingCaption, { color: palette.muted }]}>
+          {enabled ? "Aktif di perangkat ini" : "Mati di perangkat ini"}
+        </Text>
+      </View>
+      <Switch
+        value={enabled}
+        disabled={loading}
+        onValueChange={onChange}
+        trackColor={{ false: palette.surfaceMuted, true: colors.primaryLight }}
+        thumbColor={enabled ? colors.primary : palette.subtle}
+      />
+    </View>
   );
 }
 
@@ -637,6 +826,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  settingRow: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    borderBottomWidth: 1,
+  },
+  settingIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingText: {
+    flex: 1,
+  },
+  settingTitle: {
+    ...typography.bodyStrong,
+  },
+  settingCaption: {
+    ...typography.caption,
+    marginTop: 2,
+  },
   showPassword: {
     flexDirection: "row",
     alignItems: "center",
@@ -662,5 +875,54 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }],
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.42)",
+  },
+  sourceSheet: {
+    gap: spacing.md,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  sheetTitle: {
+    ...typography.h3,
+  },
+  sheetCaption: {
+    ...typography.caption,
+    lineHeight: 18,
+  },
+  sourceOptions: {
+    gap: spacing.sm,
+  },
+  sourceOption: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  sourceIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sourceText: {
+    flex: 1,
+  },
+  sourceTitle: {
+    ...typography.bodyStrong,
+  },
+  sourceCaption: {
+    ...typography.caption,
+    marginTop: 2,
   },
 });

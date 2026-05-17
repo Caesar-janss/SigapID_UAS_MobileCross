@@ -7,6 +7,8 @@ import {
   useReporterReports,
 } from "@/hooks/useEmergencyReports";
 import { useReportDispatches } from "@/hooks/useUnitDispatches";
+import { useCallInvitationActions } from "@/hooks/useCallInvitations";
+import { useAppNotification } from "@/components/app/AppNotification";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import {
   emergencyStatusLabel,
@@ -15,7 +17,6 @@ import {
   unitDispatchStatusLabel,
   unitTypeLabel,
 } from "@/utils/format";
-import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
   Card,
@@ -32,12 +33,14 @@ type TrackingBusyAction = "chat" | "finish" | "location" | "sensor";
 
 export default function ReporterTracking() {
   const { palette, mode } = useAppTheme();
+  const { showNotification } = useAppNotification();
   const params = useLocalSearchParams<{ reportId?: string }>();
   const { activeReport, loading: activeLoading } = useReporterReports();
   const targetReportId = params.reportId ?? activeReport?.id;
   const { report, loading, error, reload } = useEmergencyReport(targetReportId);
   const { latestActiveDispatch } = useReportDispatches(targetReportId);
   const { finishReport, updateReportLocation } = useEmergencyActions();
+  const { inviteCall } = useCallInvitationActions();
   const active = report ?? activeReport;
   const [busyAction, setBusyAction] = useState<TrackingBusyAction | null>(null);
   const busyActionRef = useRef<TrackingBusyAction | null>(null);
@@ -89,7 +92,24 @@ export default function ReporterTracking() {
 
   const openCall = async () => {
     if (!active?.id) return;
-    showApkOnlyFeature("Panggilan");
+
+    try {
+      await inviteCall(active.id, active.call_room ?? `sigapid-${active.id}`);
+      showNotification({
+        title: "Panggilan dikirim",
+        message: "Menunggu operator menerima panggilan.",
+        tone: "info",
+      });
+      router.push({
+        pathname: "/reporter/call",
+        params: { reportId: active.id },
+      });
+    } catch (callError) {
+      Alert.alert(
+        "Gagal memulai panggilan",
+        callError instanceof Error ? callError.message : "Terjadi kesalahan.",
+      );
+    }
   };
 
   const refreshLocation = async () => {
@@ -99,7 +119,11 @@ export default function ReporterTracking() {
     try {
       await updateReportLocation(active.id);
       await reload();
-      Alert.alert("Lokasi diperbarui", "Koordinat laporan sudah diperbarui.");
+      showNotification({
+        title: "Lokasi diperbarui",
+        message: "Koordinat laporan sudah diperbarui.",
+        tone: "success",
+      });
     } catch (locationError) {
       Alert.alert(
         "Gagal memperbarui lokasi",

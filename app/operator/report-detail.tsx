@@ -1,11 +1,14 @@
 import { router, useLocalSearchParams } from "expo-router";
+import type React from "react";
 import { useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEmergencyActions, useEmergencyReport } from "@/hooks/useEmergencyReports";
 import {
   useReportDispatches,
   useUnitDispatchActions,
 } from "@/hooks/useUnitDispatches";
+import { useCallInvitationActions } from "@/hooks/useCallInvitations";
 import { useAppNotification } from "@/components/app/AppNotification";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import {
@@ -15,7 +18,6 @@ import {
   unitDispatchStatusLabel,
   unitTypeLabel,
 } from "@/utils/format";
-import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import { UnitType } from "@/types";
 import {
@@ -28,7 +30,37 @@ import {
   StatusPill,
 } from "@/components/app/MockAppUI";
 
-type BusyAction = "chat" | "dispatch" | "finish";
+type BusyAction = "chat" | "dispatch" | "finish" | "call";
+
+const dispatchUnitOptions: {
+  type: UnitType;
+  title: string;
+  caption: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  color: string;
+}[] = [
+  {
+    type: "ambulance",
+    title: "Ambulans",
+    caption: "Petugas medis lapangan",
+    icon: "ambulance",
+    color: colors.ambulance,
+  },
+  {
+    type: "police",
+    title: "Polisi",
+    caption: "Petugas keamanan",
+    icon: "police-badge-outline",
+    color: colors.police,
+  },
+  {
+    type: "firefighter",
+    title: "Pemadam",
+    caption: "Petugas kebakaran",
+    icon: "fire-truck",
+    color: colors.firefighter,
+  },
+];
 
 export default function OperatorReportDetail() {
   const { palette } = useAppTheme();
@@ -44,7 +76,9 @@ export default function OperatorReportDetail() {
   } = useReportDispatches(params.reportId);
   const { acceptReport, finishReport } = useEmergencyActions();
   const { dispatchUnit } = useUnitDispatchActions();
+  const { inviteCall } = useCallInvitationActions();
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [dispatchPickerOpen, setDispatchPickerOpen] = useState(false);
   const busyActionRef = useRef<BusyAction | null>(null);
 
   const beginAction = (action: BusyAction) => {
@@ -97,11 +131,37 @@ export default function OperatorReportDetail() {
     }
   };
 
+  const handleOpenCall = async () => {
+    if (!report?.id) return;
+    if (!beginAction("call")) return;
+
+    try {
+      await acceptReport(report.id);
+      await inviteCall(report.id, report.call_room ?? `sigapid-${report.id}`);
+      showNotification({
+        title: "Panggilan dikirim",
+        message: "Menunggu pihak lain menerima panggilan.",
+        tone: "info",
+      });
+      router.push({
+        pathname: "/operator/call",
+        params: { reportId: report.id },
+      });
+    } catch (callError) {
+      Alert.alert(
+        "Gagal membuka panggilan",
+        callError instanceof Error ? callError.message : "Terjadi kesalahan.",
+      );
+      endAction("call");
+    }
+  };
+
   const sendHelp = async (unitType: UnitType) => {
     if (!report?.id) return;
     if (!beginAction("dispatch")) return;
 
     try {
+      setDispatchPickerOpen(false);
       await acceptReport(report.id);
       await dispatchUnit(report.id, unitType);
       await reloadDispatches({ silent: true });
@@ -111,10 +171,11 @@ export default function OperatorReportDetail() {
         tone: "success",
       });
     } catch (dispatchError) {
-      Alert.alert(
-        "Gagal mengirim bantuan",
-        dispatchError instanceof Error ? dispatchError.message : "Terjadi kesalahan.",
-      );
+      showNotification({
+        title: "Gagal mengirim bantuan",
+        message: dispatchError instanceof Error ? dispatchError.message : "Terjadi kesalahan.",
+        tone: "danger",
+      });
     } finally {
       endAction("dispatch");
     }
@@ -123,12 +184,7 @@ export default function OperatorReportDetail() {
   const handleDispatchHelp = () => {
     if (busyActionRef.current) return;
 
-    Alert.alert("Kirim Bantuan", "Pilih unit lapangan yang dibutuhkan.", [
-      { text: "Ambulans", onPress: () => sendHelp("ambulance") },
-      { text: "Polisi", onPress: () => sendHelp("police") },
-      { text: "Pemadam", onPress: () => sendHelp("firefighter") },
-      { text: "Batal", style: "cancel" },
-    ]);
+    setDispatchPickerOpen(true);
   };
 
   if (loading) {
@@ -164,42 +220,43 @@ export default function OperatorReportDetail() {
   }
 
   return (
-    <ScreenShell
-      role="operator"
-      title="Detail Laporan"
-      subtitle={`Masuk ${formatRelativeTime(report.created_at)} - ${emergencyStatusLabel(report.status)}`}
-      action={
-        <IconButton
-          icon="dots-horizontal"
-          tone="secondary"
-          onPress={() => Alert.alert("Opsi laporan")}
+    <>
+      <ScreenShell
+        role="operator"
+        title="Detail Laporan"
+        subtitle={`Masuk ${formatRelativeTime(report.created_at)} - ${emergencyStatusLabel(report.status)}`}
+        action={
+          <IconButton
+            icon="dots-horizontal"
+            tone="secondary"
+            onPress={() => Alert.alert("Opsi laporan")}
+          />
+        }
+      >
+        <MiniMap
+          height={200}
+          latitude={report.latitude}
+          longitude={report.longitude}
+          operatorLatitude={latestActiveDispatch?.current_latitude}
+          operatorLongitude={latestActiveDispatch?.current_longitude}
         />
-      }
-    >
-      <MiniMap
-        height={200}
-        latitude={report.latitude}
-        longitude={report.longitude}
-        operatorLatitude={latestActiveDispatch?.current_latitude}
-        operatorLongitude={latestActiveDispatch?.current_longitude}
-      />
 
-      <InfoGrid
-        items={[
-          { label: "Jenis", value: emergencyTypeLabel(report.type) },
-          { label: "Prioritas", value: report.priority },
-          { label: "Status", value: emergencyStatusLabel(report.status) },
-          { label: "Masuk", value: formatRelativeTime(report.created_at) },
-          {
-            label: "Koordinat",
-            value:
-              typeof report.latitude === "number" &&
-              typeof report.longitude === "number"
-                ? `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`
-                : "Belum ada",
-          },
-        ]}
-      />
+        <InfoGrid
+          items={[
+            { label: "Jenis", value: emergencyTypeLabel(report.type) },
+            { label: "Prioritas", value: report.priority },
+            { label: "Status", value: emergencyStatusLabel(report.status) },
+            { label: "Masuk", value: formatRelativeTime(report.created_at) },
+            {
+              label: "Koordinat",
+              value:
+                typeof report.latitude === "number" &&
+                typeof report.longitude === "number"
+                  ? `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`
+                  : "Belum ada",
+            },
+          ]}
+        />
 
       <Card style={styles.reporterCard}>
         <View style={styles.reporterHeader}>
@@ -312,12 +369,12 @@ export default function OperatorReportDetail() {
 
       <View style={styles.quickActions}>
         <PrimaryAction
-          label="Call"
+          label={busyAction === "call" ? "Memanggil..." : "Call"}
           icon="phone"
           tone="soft"
           style={styles.quickButton}
           disabled={!!busyAction}
-          onPress={() => showApkOnlyFeature("Panggilan")}
+          onPress={handleOpenCall}
         />
         <PrimaryAction
           label={busyAction === "chat" ? "Membuka..." : "Message"}
@@ -336,7 +393,84 @@ export default function OperatorReportDetail() {
           onPress={handleFinish}
         />
       </View>
-    </ScreenShell>
+      </ScreenShell>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={dispatchPickerOpen}
+        onRequestClose={() => setDispatchPickerOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setDispatchPickerOpen(false)}
+          />
+          <View
+            style={[
+              styles.unitSheet,
+              { backgroundColor: palette.card, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.sheetTitle, { color: palette.text }]}>
+              Kirim Bantuan
+            </Text>
+            <Text style={[styles.sheetCaption, { color: palette.muted }]}>
+              Pilih unit lapangan yang sedang dibutuhkan untuk laporan ini.
+            </Text>
+
+            <View style={styles.unitOptions}>
+              {dispatchUnitOptions.map((option) => (
+                <Pressable
+                  key={option.type}
+                  disabled={!!busyAction}
+                  onPress={() => sendHelp(option.type)}
+                  style={({ pressed }) => [
+                    styles.unitOption,
+                    { backgroundColor: palette.cardSoft, borderColor: palette.border },
+                    pressed && !busyAction && styles.pressed,
+                    busyAction && styles.disabledOption,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.unitIcon,
+                      { backgroundColor: `${option.color}1F` },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={option.icon}
+                      size={24}
+                      color={option.color}
+                    />
+                  </View>
+                  <View style={styles.unitText}>
+                    <Text style={[styles.unitTitle, { color: palette.text }]}>
+                      {option.title}
+                    </Text>
+                    <Text style={[styles.unitCaption, { color: palette.muted }]}>
+                      {option.caption}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="send-outline"
+                    size={20}
+                    color={palette.secondary}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <PrimaryAction
+              label="Batal"
+              tone="soft"
+              disabled={!!busyAction}
+              onPress={() => setDispatchPickerOpen(false)}
+            />
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -412,5 +546,61 @@ const styles = StyleSheet.create({
   dispatchTitle: {
     ...typography.bodyStrong,
     color: colors.text,
+  },
+  pressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
+  },
+  disabledOption: {
+    opacity: 0.55,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.42)",
+  },
+  unitSheet: {
+    gap: spacing.md,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  sheetTitle: {
+    ...typography.h3,
+  },
+  sheetCaption: {
+    ...typography.caption,
+    lineHeight: 18,
+  },
+  unitOptions: {
+    gap: spacing.sm,
+  },
+  unitOption: {
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: spacing.md,
+  },
+  unitIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unitText: {
+    flex: 1,
+  },
+  unitTitle: {
+    ...typography.bodyStrong,
+  },
+  unitCaption: {
+    ...typography.caption,
+    marginTop: 2,
   },
 });

@@ -22,9 +22,9 @@ import {
   formatVoiceDuration,
   useVoiceNoteRecorder,
 } from "@/hooks/useVoiceNoteRecorder";
+import { useCallInvitationActions } from "@/hooks/useCallInvitations";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { emergencyStatusLabel } from "@/utils/format";
-import { showApkOnlyFeature } from "@/utils/nativeFeatures";
 import { colors, spacing, typography } from "@/theme";
 import {
   ChatBubble,
@@ -44,6 +44,7 @@ export default function ReporterChat() {
   const { messages, loading, error, sending, sendMessage, sendVoiceNote, reload } =
     useEmergencyChat(reportId);
   const { finishReport } = useEmergencyActions();
+  const { inviteCall } = useCallInvitationActions();
   const {
     durationSeconds,
     isRecording,
@@ -122,6 +123,23 @@ export default function ReporterChat() {
     }
   };
 
+  const handleOpenCall = async () => {
+    if (!reportId) return;
+
+    try {
+      await inviteCall(reportId, report?.call_room ?? `sigapid-${reportId}`);
+      router.push({
+        pathname: "/reporter/call",
+        params: { reportId },
+      });
+    } catch (callError) {
+      Alert.alert(
+        "Gagal memulai panggilan",
+        callError instanceof Error ? callError.message : "Terjadi kesalahan.",
+      );
+    }
+  };
+
   return (
     <ScreenShell
       role="reporter"
@@ -141,7 +159,7 @@ export default function ReporterChat() {
           <IconButton
             icon="phone"
             tone="secondary"
-            onPress={() => showApkOnlyFeature("Panggilan")}
+            onPress={handleOpenCall}
           />
           <IconButton
             icon="check-circle-outline"
