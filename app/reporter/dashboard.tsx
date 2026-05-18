@@ -137,7 +137,7 @@ export default function ReporterDashboard() {
     >
       <Card style={styles.familyCard}>
         <View style={styles.sectionHeader}>
-          <View>
+          <View style={styles.sectionHeaderText}>
             <Text style={[styles.sectionTitle, { color: palette.text }]}>
               Monitoring Keluarga
             </Text>
@@ -153,7 +153,12 @@ export default function ReporterDashboard() {
                 { backgroundColor: palette.cardSoft, borderColor: palette.border },
               ]}
             >
-              <Text style={[styles.smallButtonText, { color: palette.secondary }]}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.76}
+                style={[styles.smallButtonText, { color: palette.secondary }]}
+              >
                 Detail
               </Text>
             </Pressable>
@@ -164,7 +169,12 @@ export default function ReporterDashboard() {
                 { backgroundColor: palette.cardSoft, borderColor: palette.border },
               ]}
             >
-              <Text style={[styles.smallButtonText, { color: palette.secondary }]}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.76}
+                style={[styles.smallButtonText, { color: palette.secondary }]}
+              >
                 Tambah
               </Text>
             </Pressable>
@@ -448,11 +458,12 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
+    alignItems: "flex-start",
+    gap: spacing.sm,
   },
   sectionHeaderText: {
     flex: 1,
+    minWidth: 0,
   },
   sectionTitle: {
     ...typography.bodyStrong,
@@ -465,12 +476,14 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginLeft: "auto",
+    flexShrink: 0,
+    gap: spacing.xs,
+    marginLeft: spacing.xs,
   },
   smallButton: {
     minHeight: 34,
-    paddingHorizontal: spacing.md,
+    minWidth: 64,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",

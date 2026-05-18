@@ -392,7 +392,7 @@ export function ProfileSettingsScreen({
 
         <PrimaryAction
           label="Ubah Password"
-          tone="danger"
+          tone="secondary"
           onPress={handleChangePassword}
         />
         <PrimaryAction
